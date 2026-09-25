@@ -1,4 +1,4 @@
-﻿/* ==========================================================================
+/* ==========================================================================
    咸鱼之王助手 · 前端控制器
    设计系统驱动的单页控制台：视图路由、状态轮询、方案与模板管理、框选采样
    ========================================================================== */
@@ -1157,8 +1157,19 @@ function shotUrl(name, bust = false) {
   return bust ? `${base}?t=${Date.now()}` : base;
 }
 
+/* last_screenshot 契约：string = 文件名（直接当 src 用）。
+   旧实现把整张 PNG 字节塞进 state，前端收到 ArrayBuffer / TypedArray / 对象都按 fallback 处理，
+   不再走 shotUrl，避免被某种"看似字符串但其实是 ArrayBuffer"的返回把 <img src> 当成 URL 渲染。 */
+function pickScreenshotName(value) {
+  if (typeof value !== "string" || !value) return null;
+  // 文件名只允许 basename + png 扩展名，挡住一切目录穿越和奇怪字符
+  if (value.includes("/") || value.includes("\\") || value.includes("..")) return null;
+  if (!/\.png$/i.test(value)) return null;
+  return value;
+}
+
 function renderLiveShot(state) {
-  const name = state.last_screenshot || null;
+  const name = pickScreenshotName(state.last_screenshot);
   const running = Boolean(state.is_running);
   const note = $("liveShotNote");
 

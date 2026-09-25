@@ -23,12 +23,14 @@ class RunnerState:
     misses: int = 0
     last_error: str | None = None
     last_match: dict[str, object] | None = None
-    last_screenshot: bytes | None = None
+    last_screenshot: Path | None = None
     logs: deque[str] = field(default_factory=lambda: deque(maxlen=200))
 
     def snapshot(self) -> dict[str, object]:
         progress_percent = round((self.clicked / self.target) * 100, 1) if self.target else 0
         is_running = self.status in {"starting", "running"}
+        # 截图落盘后只对外暴露文件名（路径细节是实现，不该出现在契约里）
+        last_screenshot = self.last_screenshot.name if self.last_screenshot else None
         return {
             "status": self.status,
             "clicked": self.clicked,
@@ -38,7 +40,7 @@ class RunnerState:
             "misses": self.misses,
             "last_error": self.last_error,
             "last_match": self.last_match,
-            "last_screenshot": self.last_screenshot,
+            "last_screenshot": last_screenshot,
             "logs": list(self.logs),
         }
 
@@ -97,7 +99,8 @@ class TaskRunner:
                 screenshot, dropped = await self._capture_stable_frame(config)
                 if dropped:
                     self._log(f"画面未静止，丢弃 {dropped} 帧后取用")
-                state.last_screenshot = screenshot
+                # 落盘后只把路径留给 API/前端，避免状态对象长期持有大字节数组
+                state.last_screenshot = self._write_latest_screenshot(screenshot)
                 click_index = state.clicked
                 template_names = config.first_template_names if (click_index == 0 and config.first_template_names) else config.template_names
                 match = self.matcher.match(screenshot, template_names, threshold, profile)
@@ -188,6 +191,21 @@ class TaskRunner:
         try:
             SHOT_DIR.mkdir(parents=True, exist_ok=True)
             path = SHOT_DIR / f"{tag}-{datetime.now().strftime('%Y%m%d-%H%M%S-%f')}.png"
+            path.write_bytes(data)
+            return path
+        except OSError:
+            return None
+
+    def _write_latest_screenshot(self, data: bytes) -> Path | None:
+        """把最近一次稳定帧覆盖写到 SHOT_DIR/last-frame.png，返回写入路径。
+
+        用固定文件名而非带时间戳：前端只要在 filename 变化时才换图，覆盖写
+        可以让 /api/screenshots/latest.png 永远拿到「最新一帧」，同时
+        snapshot() 暴露的 last_screenshot 也只会是 last-frame.png 一个值。
+        """
+        try:
+            SHOT_DIR.mkdir(parents=True, exist_ok=True)
+            path = SHOT_DIR / "last-frame.png"
             path.write_bytes(data)
             return path
         except OSError:

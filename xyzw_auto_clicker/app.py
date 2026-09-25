@@ -7,7 +7,7 @@ from fastapi import FastAPI, HTTPException, Request
 from fastapi.responses import FileResponse, HTMLResponse, Response
 from fastapi.staticfiles import StaticFiles
 from fastapi.templating import Jinja2Templates
-from pydantic import BaseModel, Field
+from pydantic import BaseModel, Field, field_validator
 
 from .adb import AdbClient
 from .matcher import ImageMatcher
@@ -35,6 +35,17 @@ class CropRequest(BaseModel):
     width: int = Field(gt=0)
     height: int = Field(gt=0)
 
+    @field_validator("device_id")
+    @classmethod
+    def _validate_device_id(cls, value: str | None) -> str | None:
+        # 非空时必须是 ADB serial 形态：字母数字 + . _ : -
+        # 防止路径分隔符或 shell 元字符借 device_id 注入（截图接口、调试日志、文件名拼接都用得到它）
+        if value is None or value == "":
+            return None
+        if not re.fullmatch(r"[A-Za-z0-9._:-]+", value):
+            raise ValueError("device_id 仅允许字母数字与 . _ : -")
+        return value
+
 
 class StartRequest(PlanPayload):
     pass
@@ -60,22 +71,26 @@ async def list_devices() -> dict[str, object]:
 @app.post("/api/screenshot")
 async def take_screenshot(payload: dict[str, str | None] | None = None) -> dict[str, str]:
     device_id = payload.get("device_id") if payload else None
+    if device_id is not None and device_id != "" and not re.fullmatch(r"[A-Za-z0-9._:-]+", device_id):
+        raise HTTPException(status_code=400, detail="device_id 仅允许字母数字与 . _ : -")
     data = await adb.screenshot_png(device_id)
-    runner.state.last_screenshot = data
+    # 与 runner 保持一致：截图落盘一份给 /api/screenshots/latest.png 用，不在状态里塞大字节数组
+    runner.state.last_screenshot = _write_latest_screenshot(data)
     return {"url": "/api/screenshots/latest.png"}
 
 
 @app.get("/api/screenshots/latest.png")
-async def get_latest_screenshot() -> Response:
-    data = runner.state.last_screenshot
-    if not data:
+async def get_latest_screenshot() -> FileResponse:
+    path = runner.state.last_screenshot
+    if not path or not path.exists():
         raise HTTPException(status_code=404, detail="暂未采集到截图")
-    return Response(content=data, media_type="image/png")
+    return FileResponse(path, media_type="image/png")
 
 
 @app.get("/api/screenshots/{name}")
 async def get_screenshot(name: str) -> FileResponse:
-    path = SHOT_DIR / name
+    safe_name = _safe_shot_name(name)
+    path = SHOT_DIR / safe_name
     if not path.exists():
         raise HTTPException(status_code=404, detail="截图不存在")
     return FileResponse(path, media_type="image/png")
@@ -89,7 +104,8 @@ async def list_templates() -> dict[str, object]:
 
 @app.get("/api/templates/{name}")
 async def get_template(name: str) -> FileResponse:
-    path = TEMPLATE_DIR / name
+    safe_name = _safe_template_name(name)
+    path = TEMPLATE_DIR / safe_name
     if not path.exists():
         raise HTTPException(status_code=404, detail="模板不存在")
     return FileResponse(path, media_type="image/png")
@@ -121,16 +137,18 @@ async def api_save_plan(req: PlanSaveRequest) -> dict[str, object]:
 
 @app.get("/api/plans/{filename}")
 async def api_load_plan(filename: str) -> dict[str, object]:
+    safe_name = _safe_plan_filename(filename)
     try:
-        return load_plan(filename).__dict__
+        return load_plan(safe_name).__dict__
     except FileNotFoundError as exc:
         raise HTTPException(status_code=404, detail=str(exc)) from exc
 
 
 @app.delete("/api/plans/{filename}")
 async def api_delete_plan(filename: str) -> Response:
+    safe_name = _safe_plan_filename(filename)
     try:
-        delete_plan(filename)
+        delete_plan(safe_name)
     except OSError as exc:
         raise HTTPException(status_code=409, detail=f"方案移出失败：{exc}") from exc
     return Response(status_code=204)
@@ -165,10 +183,48 @@ async def clear_stop_file() -> Response:
 
 
 def _safe_template_name(name: str) -> str:
-    stem = re.sub(r"[^a-zA-Z0-9_\-\u4e00-\u9fff]", "_", Path(name).stem).strip("._")
-    if not stem:
-        raise HTTPException(status_code=400, detail="模板名称无效")
-    return f"{stem}.png"
+    return _safe_name(name, allowed_extension=".png", display="模板")
+
+
+def _safe_shot_name(name: str) -> str:
+    return _safe_name(name, allowed_extension=".png", display="截图")
+
+
+def _safe_plan_filename(name: str) -> str:
+    return _safe_name(name, allowed_extension=".json", display="方案")
+
+
+def _safe_name(name: str, allowed_extension: str, display: str) -> str:
+    """统一白名单：拒空、拒 ..、拒绝对路径、拒目录分隔符、拒非指定扩展名。
+
+    三个 GET 共用：任何「按文件名取文件」的接口都不能相信客户端发来的字符串，
+    否则 /api/screenshots/../app.py 之类的请求会一路走出 SHOT_DIR。
+    """
+    if not name or not name.strip():
+        raise HTTPException(status_code=400, detail=f"{display}名称无效")
+    if "/" in name or "\\" in name:
+        raise HTTPException(status_code=400, detail=f"{display}名称无效")
+    if name in {".", ".."} or name.startswith(".."):
+        raise HTTPException(status_code=400, detail=f"{display}名称无效")
+    if Path(name).is_absolute():
+        raise HTTPException(status_code=400, detail=f"{display}名称无效")
+    if Path(name).suffix.lower() != allowed_extension:
+        raise HTTPException(status_code=400, detail=f"{display}名称无效")
+    return name
+
+
+def _write_latest_screenshot(data: bytes) -> Path | None:
+    """与 runner._write_latest_screenshot 行为一致：手动截图也落到同一个 last-frame.png。
+
+    runner 和手动截图共用一份固定文件名，/api/screenshots/latest.png 就能稳定给出最新一帧。
+    """
+    try:
+        SHOT_DIR.mkdir(parents=True, exist_ok=True)
+        path = SHOT_DIR / "last-frame.png"
+        path.write_bytes(data)
+        return path
+    except OSError:
+        return None
 
 
 def _asset_version() -> str:
