@@ -15,6 +15,8 @@ Salted Fish King's chest event rewards repeat-tap grinding. `lazy-fish` watches 
 
 It **only** uses ADB screenshots and `input tap`. No memory reads, no client patching, no root.
 
+> 📖 [中文说明](./README.zh-CN.md)
+
 ---
 
 ## ✨ Features
