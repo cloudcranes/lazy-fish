@@ -22,8 +22,13 @@ services:
       # via 172.17.0.1:5037 (default bridge) or `host.docker.internal` with:
       #   extra_hosts: ["host.docker.internal:host-gateway"]
     healthcheck:
-      test: ["CMD", "python", "-c", "import urllib.request,sys;sys.exit(0 if urllib.request.urlopen('http://127.0.0.1:8999/', timeout=3).status==200 else 1)"]
+      # /api/health 只判断「进程活了 + FastAPI 在响应」，不依赖模板/页面渲染，更稳定。
+      test: ["CMD", "python", "-c", "import urllib.request,sys;sys.exit(0 if urllib.request.urlopen('http://127.0.0.1:8999/api/health', timeout=3).status==200 else 1)"]
       interval: 30s
       timeout: 5s
       retries: 3
       start_period: 10s
+    # 资源上限：单容器 512MB / 1.0 CPU。openCV + FastAPI 单机自检够用；
+    # 跑实际 plan 时若 OOM，再上调 mem_limit。
+    mem_limit: 512M
+    cpus: 1.0

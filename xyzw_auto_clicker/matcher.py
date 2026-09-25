@@ -1,11 +1,14 @@
 from __future__ import annotations
 
+import logging
 from collections import deque
 from dataclasses import dataclass
 from pathlib import Path
 
 import cv2
 import numpy as np
+
+logger = logging.getLogger(__name__)
 
 # 多尺度参数默认值，依据 docs/RECOGNITION-RESEARCH.md 的实测标定。
 # 同一个按钮在游戏里会以 395 / 438 / 487 px 三种宽度渲染（相差约 ±11%），
@@ -170,6 +173,14 @@ class ImageMatcher:
                 height=hit.height,
                 confidence=hit.score,
                 scale=hit.scale,
+            )
+            # 命中记一条 INFO，模板名/置信度/尺度都打出来，便于事后追溯「是不是乱点了」
+            logger.info(
+                "matcher hit template=%s confidence=%.3f scale=%.3f",
+                name,
+                hit.score,
+                hit.scale,
+                extra={"template_name": name, "confidence": hit.score, "scale": hit.scale},
             )
         return best
 

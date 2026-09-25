@@ -1,6 +1,9 @@
 from __future__ import annotations
 
+import logging
+import os
 import re
+import time
 from pathlib import Path
 
 from fastapi import FastAPI, HTTPException, Request
@@ -10,11 +13,21 @@ from fastapi.templating import Jinja2Templates
 from pydantic import BaseModel, Field, field_validator
 
 from .adb import AdbClient
+from .logging_setup import configure as _configure_logging
 from .matcher import ImageMatcher
 from .plans import PlanPayload, PlanSaveRequest, delete_plan, ensure_default_plan, list_plans, load_plan, save_plan
 from .runner import TaskRunner
 from .settings import BASE_DIR, SHOT_DIR, STOP_FILE, TEMPLATE_DIR, repair_template_names
 from .tasks.chest import build_chest_config
+
+# 模块顶层 logger（PR-3 可观测性：所有跨模块日志统一从这里出）
+logger = logging.getLogger(__name__)
+
+# 进程启动时间，/api/health 用它算 uptime（容器重启后自动归零）
+_APP_START_TIME = time.monotonic()
+
+# JSON fmt 仅当 LOG_JSON=1 才开；不传 fmt= 时由环境变量决定
+_configure_logging(level=os.environ.get("LOG_LEVEL", "INFO"))
 
 app = FastAPI(title="咸鱼之王自动点击器")
 templates = Jinja2Templates(directory=str(BASE_DIR / "templates"))
@@ -180,6 +193,30 @@ async def clear_stop_file() -> Response:
     if STOP_FILE.exists():
         STOP_FILE.unlink()
     return Response(status_code=204)
+
+
+@app.get("/api/health")
+async def health() -> dict[str, object]:
+    """供 Dockerfile HEALTHCHECK 与 docker-compose healthcheck 复用。
+
+    关键信号：
+    - last_screenshot_mtime: 最近一次采集到截图的时间戳；None 表示尚未截图。
+    - runner_status: idle/starting/running/paused/stopped/done/error。
+    - uptime: 进程启动到现在的秒数（容器视角的"活了多久"）。
+    """
+    path = runner.state.last_screenshot
+    last_screenshot_mtime: float | None = None
+    if path is not None:
+        try:
+            last_screenshot_mtime = path.stat().st_mtime
+        except OSError:
+            last_screenshot_mtime = None
+    return {
+        "status": "ok",
+        "last_screenshot_mtime": last_screenshot_mtime,
+        "runner_status": runner.state.status,
+        "uptime": round(time.monotonic() - _APP_START_TIME, 3),
+    }
 
 
 def _safe_template_name(name: str) -> str:

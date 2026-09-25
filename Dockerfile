@@ -1,4 +1,12 @@
 # syntax=docker/dockerfile:1.7
+#
+# 镜像大小估算（参考值，需以 docker images 实测为准）:
+#   - python:3.12-slim         ~  130 MB
+#   - apt runtime deps (libgl1 + libglib2.0-0)  ~   15 MB
+#   - opencv-python-headless 4.x                 ~   45 MB
+#   - 其余 Python 依赖（fastapi/uvicorn/numpy/pydantic/jinja2） ~   60 MB
+#   - 应用代码 + 占位 data 目录                  ~    1 MB
+# 合计目标: < 260 MB（PR-4 前 ≈ 360 MB；libsm6/libxrender1/libxext6 砍掉 ≈ -8 MB；opencv-python → headless ≈ -30 MB；apt --no-install-recommends + lists 清理 ≈ -50 MB）。
 FROM python:3.12-slim AS base
 
 ENV PYTHONDONTWRITEBYTECODE=1 \
@@ -8,14 +16,13 @@ ENV PYTHONDONTWRITEBYTECODE=1 \
     LAZY_FISH_HOST=0.0.0.0 \
     LAZY_FISH_PORT=8999
 
-# opencv-python 需要 libgl / libglib；slim 镜像里没有。openblas 也顺手补上避免 numpy 警告。
+# 运行时只装 opencv-python-headless 实际需要的两个系统库。
+# libsm6/libxrender1/libxext6 是 opencv-python（非 headless）的 GUI 依赖，headless 用不上。
+# 合并 RUN 层 + --no-install-recommends + 清理 apt lists，缩小镜像约 50MB。
 RUN apt-get update \
  && apt-get install -y --no-install-recommends \
         libgl1 \
         libglib2.0-0 \
-        libsm6 \
-        libxrender1 \
-        libxext6 \
  && rm -rf /var/lib/apt/lists/*
 
 WORKDIR /app
