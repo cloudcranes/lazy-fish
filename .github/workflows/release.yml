@@ -16,6 +16,8 @@ jobs:
     timeout-minutes: 30
     steps:
       - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
 
       - name: Extract version
         id: version
@@ -59,29 +61,6 @@ jobs:
             org.opencontainers.image.version=${{ steps.version.outputs.VERSION }}
           cache-from: type=gha
           cache-to: type=gha,mode=max
-
-      - name: Generate changelog excerpt
-        if: github.event_name == 'push'
-        id: changelog
-        run: |
-          PREV=$(git tag --sort=-version:refname | grep -E '^v[0-9]' | grep -v "^${GITHUB_REF_NAME}$" | head -n 1 || echo "")
-          if [ -z "${PREV}" ]; then
-            RANGE="${GITHUB_SHA}^"
-          else
-            RANGE="${PREV}..${GITHUB_SHA}"
-          fi
-          {
-            echo "## What's changed"
-            echo
-            echo "Image: \`ghcr.io/cloudcranes/lazy-fish:${VERSION}\`"
-            echo
-            echo "### Commits"
-            echo
-            git log "${RANGE}" --pretty=format:"- %s (%h)" --no-merges
-          } >> "${GITHUB_OUTPUT}"
-          echo "BODY<<EOF" >> "${GITHUB_OUTPUT}"
-          cat "${GITHUB_OUTPUT_FILE}" >> "${GITHUB_OUTPUT}" 2>/dev/null || true
-          echo "EOF" >> "${GITHUB_OUTPUT}"
 
       - name: Create GitHub release
         if: github.event_name == 'push'

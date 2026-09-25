@@ -8,27 +8,36 @@ PORT      ?= 8765
 COMPOSE   ?= docker compose
 TAG       ?= dev
 
-.PHONY: help install run test test-core eval lint clean build compose-up compose-down compose-build release
+.PHONY: help install dev run test test-core eval lint format clean build compose-up compose-down compose-build release
 
 help:  ## list targets
 	@grep -E '^[a-zA-Z_-]+:.*?## .*$$' $(MAKEFILE_LIST) | awk 'BEGIN{FS=":.*?## "}{printf "  %-14s %s\n", $$1, $$2}'
 
-install:  ## create venv and install deps
+install:  ## create venv and install runtime deps
 	$(PY) -m venv .venv
 	.venv/bin/$(PIP) install -r requirements.txt
-	.venv/bin/$(PIP) install pytest
+
+dev:  ## install runtime + dev (pytest) deps into the active environment
+	$(PIP) install -r requirements-dev.txt
 
 run:  ## run WebUI locally on LAZY_FISH_PORT (default 8765)
-	LAZY_FISH_PORT=$(PORT) .venv/bin/python -m xyzw_auto_clicker
+	LAZY_FISH_PORT=$(PORT) $(PY) -m xyzw_auto_clicker
 
 test:  ## run unit tests
-	.venv/bin/python -m pytest tests/test_core.py -x -q
+	$(PY) -m pytest tests/test_core.py -x -q
 
 eval:  ## recognition regression on real footage
-	.venv/bin/python tests/recognition_eval.py
+	$(PY) tests/recognition_eval.py
 
-lint:  ## sanity: import every module without side-effects
-	.venv/bin/python -c "from xyzw_auto_clicker import matcher, runner, app, adb, models; print('imports OK')"
+lint:  ## import every module without side-effects (cheap smoke test)
+	$(PY) -c "from xyzw_auto_clicker import matcher, runner, app, adb, models; print('imports OK')"
+
+format:  ## run black on the package if installed; no-op otherwise
+	@if $(PY) -c "import black" >/dev/null 2>&1; then \
+	  $(PY) -m black xyzw_auto_clicker tests; \
+	else \
+	  echo "black not installed; pip install -r requirements-dev.txt to enable format target"; \
+	fi
 
 clean:  ## remove caches and venv
 	rm -rf .venv .pytest_cache **/__pycache__ */__pycache__
