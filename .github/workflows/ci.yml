@@ -40,7 +40,7 @@ jobs:
 
       - name: Unit tests
         run: |
-          python -m pytest tests/test_core.py -x -q
+          python -m pytest tests/ -x -q
 
       # recognition_eval 需要 data/video.mp4 与 data/screenshots/，CI 上若没有真实语料会跳过
       - name: Recognition eval (if corpus present)
@@ -74,5 +74,5 @@ jobs:
         run: |
           docker run --rm -d --name lazy-fish-ci -p 8999:8999 lazy-fish:ci
           sleep 8
-          curl -fsS http://127.0.0.1:8999/ -o /dev/null
+          curl -fsS http://127.0.0.1:8999/api/health -o /dev/null
           docker stop lazy-fish-ci

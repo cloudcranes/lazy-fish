@@ -40,7 +40,8 @@ EXPOSE 8999
 
 # 容器内不连 adb，跑纯 web；adb 转发留给宿主侧的 adb-server。
 HEALTHCHECK --interval=30s --timeout=5s --start-period=10s --retries=3 \
-  CMD python -c "import urllib.request, sys; \
-sys.exit(0 if urllib.request.urlopen('http://127.0.0.1:8999/', timeout=3).status == 200 else 1)"
+  CMD python -c "import urllib.request, json, sys; \
+r = urllib.request.urlopen('http://127.0.0.1:8999/api/health', timeout=3); \
+sys.exit(0 if json.loads(r.read()).get('status') == 'ok' else 1)"
 
 CMD ["python", "-m", "xyzw_auto_clicker"]
