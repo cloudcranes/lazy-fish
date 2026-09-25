@@ -1,4 +1,4 @@
-﻿/* ==========================================================================
+/* ==========================================================================
    咸鱼之王助手 · 基础重置
    ========================================================================== */
 
@@ -1041,8 +1041,9 @@ pre,
   background: var(--surface-hover);
 }
 .alert-close:focus-visible {
-  outline: 2px solid currentColor;
-  outline-offset: 1px;
+  outline: none;
+  opacity: 1;
+  box-shadow: var(--focus-ring);
 }
 
 /* ==========================================================================
@@ -1262,6 +1263,19 @@ pre,
 }
 .quick-row dd {
   margin: 0;
+  font-weight: 500;
+  text-align: right;
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+/* 与 <dt>/<dd> 等价的语义：标签 + 值；用于把"执行概要"从 <dl> 换成 <section> 后
+   保持视觉一致。Safari + VoiceOver 对 <dl> 的播报存在 a11y 问题，改用普通 span。 */
+.quick-row .quick-label {
+  color: var(--text-secondary);
+}
+.quick-row .quick-value {
   font-weight: 500;
   text-align: right;
   min-width: 0;
@@ -2132,9 +2146,6 @@ pre,
 
 @media (max-width: 1080px) {
   .console-grid,
-  .shot-layout {
-    grid-template-columns: minmax(0, 1fr);
-  }
   .shot-layout {
     grid-template-columns: minmax(0, 1fr);
   }

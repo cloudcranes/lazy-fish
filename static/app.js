@@ -11,6 +11,9 @@ const RECOMMENDED_REPEAT = "video-repeat10.png";
 const DEFAULT_SCALE_MIN = 0.78;
 const DEFAULT_SCALE_MAX = 1.3;
 const DEFAULT_SCALE_STEP = 0.035;
+const DEFAULT_ROI_BAND = [0.55, 0.80];
+const DEFAULT_FREEZE_THRESHOLD = 3.0;
+const DEFAULT_FREEZE_MAX_WAITS = 4;
 const DEFAULT_FREEZE_GUARD = true;
 // 尺度档位上限：档位越多越慢，超过就说明参数配错了
 const MAX_SCALE_STEPS = 60;
@@ -78,8 +81,16 @@ const LONG_RUN_SECONDS = 30 * 60;
    基础工具
    -------------------------------------------------------------------------- */
 
+const TOAST_MAX = 5;
+
 function toast(message, type = "error") {
   const host = $("toastHost");
+  // 上限 5 条：超出时按 FIFO 把最早一条立刻移除，避免错误风暴把屏幕挤满。
+  while (host.children.length >= TOAST_MAX) {
+    const oldest = host.firstElementChild;
+    if (!oldest) break;
+    host.removeChild(oldest);
+  }
   const item = document.createElement("div");
   item.className = `toast is-${type}`;
   item.setAttribute("role", "status");
@@ -169,6 +180,9 @@ function planFingerprint(p) {
     scale_min: Number(p.scale_min ?? DEFAULT_SCALE_MIN),
     scale_max: Number(p.scale_max ?? DEFAULT_SCALE_MAX),
     scale_step: Number(p.scale_step ?? DEFAULT_SCALE_STEP),
+    roi_band: JSON.stringify(p.roi_band ?? DEFAULT_ROI_BAND),
+    freeze_threshold: Number(p.freeze_threshold ?? DEFAULT_FREEZE_THRESHOLD),
+    freeze_max_waits: Number(p.freeze_max_waits ?? DEFAULT_FREEZE_MAX_WAITS),
     freeze_guard: p.freeze_guard !== false,
   });
 }
@@ -223,11 +237,46 @@ function setView(key) {
     if (view) view.classList.toggle("is-active", item === key);
   });
   document.querySelectorAll("[data-nav]").forEach((btn) => {
-    btn.setAttribute("aria-current", btn.dataset.nav === key ? "page" : "false");
+    const isActive = btn.dataset.nav === key;
+    btn.setAttribute("aria-current", isActive ? "page" : "false");
+    btn.setAttribute("aria-selected", String(isActive));
+    btn.tabIndex = isActive ? 0 : -1;
   });
   const label = NAV_ITEMS.find(([item]) => item === key)?.[1] || "控制台";
   $("topbarTitle").textContent = label;
   if (key === "logs") scrollLogs();
+}
+
+function focusNavItem(index) {
+  const buttons = document.querySelectorAll("[data-nav]");
+  if (!buttons.length) return;
+  const next = (index + buttons.length) % buttons.length;
+  const btn = buttons[next];
+  location.hash = `#${btn.dataset.nav}`;
+  setView(btn.dataset.nav);
+  btn.focus();
+}
+
+function bindNavKeyboard() {
+  const navList = document.querySelector(".nav");
+  if (!navList) return;
+  navList.setAttribute("role", "tablist");
+  navList.setAttribute("aria-orientation", "vertical");
+  document.querySelectorAll("[data-nav]").forEach((btn) => {
+    btn.setAttribute("role", "tab");
+    btn.setAttribute("aria-controls", `view-${btn.dataset.nav}`);
+    const panel = $(`view-${btn.dataset.nav}`);
+    if (panel) panel.setAttribute("aria-labelledby", btn.id || "");
+  });
+  navList.addEventListener("keydown", (event) => {
+    if (event.key !== "ArrowDown" && event.key !== "ArrowUp" && event.key !== "ArrowRight" && event.key !== "ArrowLeft") return;
+    const buttons = [...document.querySelectorAll("[data-nav]")];
+    const current = buttons.indexOf(document.activeElement);
+    if (current === -1) return;
+    event.preventDefault();
+    const direction = event.key === "ArrowDown" || event.key === "ArrowRight" ? 1 : -1;
+    focusNavItem(current + direction);
+  });
 }
 
 window.addEventListener("hashchange", () => setView(currentView()));
@@ -750,7 +799,9 @@ async function applyRecommended() {
   $("planName").value = "推荐宝箱方案";
   const match = plansCache.find((item) => item.name === "推荐宝箱方案");
   activePlanFilename = match ? match.filename : null;
-  activePlanSnapshot = match ? planFingerprint(match.payload || {}) : null;
+  // 套用后立即把"已载入快照"对齐到当前表单，避免把"点击推荐按钮"本身当作一次改动。
+  // 推荐参数若与已保存的同名方案一致，dirty 自然为 false；若不一致，用户改完再保存即可。
+  activePlanSnapshot = planFingerprint(currentPayload());
   lastPayload = currentPayload();
   renderActivePlan();
   toast("已套用推荐方案", "success");
@@ -1376,6 +1427,7 @@ function bindActions() {
 async function init() {
   initAppearance();
   bindNav();
+  bindNavKeyboard();
   bindActions();
   bindSelection();
   setView(currentView());

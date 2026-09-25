@@ -1,4 +1,4 @@
-﻿<!doctype html>
+<!doctype html>
 <html lang="zh-CN" data-theme="light">
   <head>
     <meta charset="utf-8" />
@@ -23,14 +23,14 @@
         </div>
 
         <div class="nav-group">运行</div>
-        <button class="nav-item" type="button" data-nav="console" aria-current="page">
+        <button class="nav-item" type="button" data-nav="console" id="nav-console" aria-current="page">
           <svg class="nav-item-icon" viewBox="0 0 20 20" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round">
             <rect x="2.5" y="3.5" width="15" height="13" rx="2.5" />
             <path d="M6.5 8h7M6.5 11.5h4" />
           </svg>
           <span>控制台</span>
         </button>
-        <button class="nav-item" type="button" data-nav="plans">
+        <button class="nav-item" type="button" data-nav="plans" id="nav-plans">
           <svg class="nav-item-icon" viewBox="0 0 20 20" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round">
             <path d="M4 3.5h8.5L16.5 7v9.5H4z" />
             <path d="M12 3.5V7h4.5M6.5 10h7M6.5 13h4.5" />
@@ -39,7 +39,7 @@
         </button>
 
         <div class="nav-group">维护</div>
-        <button class="nav-item" type="button" data-nav="templates">
+        <button class="nav-item" type="button" data-nav="templates" id="nav-templates">
           <svg class="nav-item-icon" viewBox="0 0 20 20" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round">
             <rect x="2.5" y="3.5" width="15" height="13" rx="2.5" />
             <path d="M2.5 8h15M7 8v8.5" />
@@ -47,14 +47,14 @@
           <span>模板管理</span>
           <span class="nav-item-badge" id="navTemplateBadge" hidden>0</span>
         </button>
-        <button class="nav-item" type="button" data-nav="capture">
+        <button class="nav-item" type="button" data-nav="capture" id="nav-capture">
           <svg class="nav-item-icon" viewBox="0 0 20 20" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round">
             <path d="M3 7.5A2 2 0 0 1 5 5.5h1.8l1.1-2h3.2l1.1 2H15a2 2 0 0 1 2 2v7a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2z" />
             <circle cx="10" cy="11" r="3" />
           </svg>
           <span>截图采样</span>
         </button>
-        <button class="nav-item" type="button" data-nav="logs">
+        <button class="nav-item" type="button" data-nav="logs" id="nav-logs">
           <svg class="nav-item-icon" viewBox="0 0 20 20" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round">
             <path d="M3.5 5.5h13M3.5 10h13M3.5 14.5h8" />
           </svg>
@@ -92,7 +92,7 @@
 
         <main class="content">
           <!-- ---------------- 控制台 ---------------- -->
-          <section class="view is-active" id="view-console" role="tabpanel" aria-label="控制台">
+          <section class="view is-active" id="view-console" role="tabpanel" tabindex="-1" aria-labelledby="nav-console">
             <div class="view-head">
               <div>
                 <div class="eyebrow">Dashboard</div>
@@ -208,23 +208,23 @@
             </div>
 
             <div class="console-grid">
-              <dl class="card quick-list" style="margin: 0">
+              <section class="card quick-list" style="margin: 0" aria-labelledby="quickListTitle">
                 <div class="card-head">
-                  <span class="card-title">执行概要</span>
+                  <span class="card-title" id="quickListTitle">执行概要</span>
                   <span class="card-title-note">随参数实时更新</span>
                 </div>
-                <div class="quick-row"><dt>首次模板</dt><dd id="summaryFirst">—</dd></div>
-                <div class="quick-row"><dt>后续模板</dt><dd id="summaryRepeats">—</dd></div>
-                <div class="quick-row"><dt>十连次数</dt><dd class="num" id="summaryClickCount">—</dd></div>
-                <div class="quick-row"><dt>预计总耗时</dt><dd class="num" id="summaryDuration">—</dd></div>
-                <div class="quick-row"><dt>点后等待</dt><dd class="num" id="summaryWait">—</dd></div>
-                <div class="quick-row"><dt>后续连点</dt><dd class="num" id="summaryRepeat">—</dd></div>
-                <div class="quick-row"><dt>匹配置信度</dt><dd class="num" id="summaryThreshold">—</dd></div>
+                <div class="quick-row"><span class="quick-label">首次模板</span><span class="quick-value" id="summaryFirst">—</span></div>
+                <div class="quick-row"><span class="quick-label">后续模板</span><span class="quick-value" id="summaryRepeats">—</span></div>
+                <div class="quick-row"><span class="quick-label">十连次数</span><span class="quick-value num" id="summaryClickCount">—</span></div>
+                <div class="quick-row"><span class="quick-label">预计总耗时</span><span class="quick-value num" id="summaryDuration">—</span></div>
+                <div class="quick-row"><span class="quick-label">点后等待</span><span class="quick-value num" id="summaryWait">—</span></div>
+                <div class="quick-row"><span class="quick-label">后续连点</span><span class="quick-value num" id="summaryRepeat">—</span></div>
+                <div class="quick-row"><span class="quick-label">匹配置信度</span><span class="quick-value num" id="summaryThreshold">—</span></div>
                 <div class="card-foot">
                   <button class="btn btn-ghost" type="button" id="applyRecommended">套用推荐方案</button>
                   <button class="btn btn-ghost" type="button" id="resumeBtn">继续上次方案</button>
                 </div>
-              </dl>
+              </section>
 
               <div class="card">
                 <div class="card-head">
@@ -270,7 +270,7 @@
           </section>
 
           <!-- ---------------- 方案与参数 ---------------- -->
-          <section class="view" id="view-plans" role="tabpanel" aria-label="方案与参数">
+          <section class="view" id="view-plans" role="tabpanel" tabindex="-1" aria-labelledby="nav-plans">
             <div class="view-head">
               <div>
                 <div class="eyebrow">Plans</div>
@@ -462,7 +462,7 @@
           </section>
 
           <!-- ---------------- 模板管理 ---------------- -->
-          <section class="view" id="view-templates" role="tabpanel" aria-label="模板管理">
+          <section class="view" id="view-templates" role="tabpanel" tabindex="-1" aria-labelledby="nav-templates">
             <div class="view-head">
               <div>
                 <div class="eyebrow">Templates</div>
@@ -493,7 +493,7 @@
           </section>
 
           <!-- ---------------- 截图采样 ---------------- -->
-          <section class="view" id="view-capture" role="tabpanel" aria-label="截图采样">
+          <section class="view" id="view-capture" role="tabpanel" tabindex="-1" aria-labelledby="nav-capture">
             <div class="view-head">
               <div>
                 <div class="eyebrow">Capture</div>
@@ -565,7 +565,7 @@
           </section>
 
           <!-- ---------------- 运行日志 ---------------- -->
-          <section class="view" id="view-logs" role="tabpanel" aria-label="运行日志">
+          <section class="view" id="view-logs" role="tabpanel" tabindex="-1" aria-labelledby="nav-logs">
             <div class="view-head">
               <div>
                 <div class="eyebrow">Logs</div>
