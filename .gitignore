@@ -1,0 +1,47 @@
+# Python
+__pycache__/
+*.py[cod]
+*.egg-info/
+.eggs/
+build/
+dist/
+.venv/
+venv/
+env/
+
+# IDE / editor
+.idea/
+.vscode/
+*.swp
+
+# OS
+.DS_Store
+Thumbs.db
+
+# Runtime / generated data
+data/
+data/screenshots/
+data/plans-trash/
+data/plans/
+data/templates/
+data/video.mp4
+data/video_frames/
+data/xyzw_contact.png
+*.log
+STOP
+
+# Test artifacts
+.pytest_cache/
+.coverage
+htmlcov/
+.mypy_cache/
+.ruff_cache/
+
+# Docker / compose
+*.pid
+
+# Large media
+*.mp4
+*.avi
+*.mkv
+*.mov

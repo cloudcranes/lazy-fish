@@ -1,0 +1,25 @@
+services:
+  lazy-fish:
+    build: .
+    image: lazy-fish:latest
+    container_name: lazy-fish
+    restart: unless-stopped
+    ports:
+      - "8999:8999"
+    environment:
+      LAZY_FISH_HOST: 0.0.0.0
+      LAZY_FISH_PORT: 8999
+    volumes:
+      # Persist templates / plans / last-frame cache on the host.
+      - ./data:/app/data
+      # Optional: reuse the host's adb-server. macOS / Windows:
+      #   -v /etc/localtime:/etc/localtime:ro
+      # Linux hosts running `adb start-server` on 5037 -> container reaches it
+      # via 172.17.0.1:5037 (default bridge) or `host.docker.internal` with:
+      #   extra_hosts: ["host.docker.internal:host-gateway"]
+    healthcheck:
+      test: ["CMD", "python", "-c", "import urllib.request,sys;sys.exit(0 if urllib.request.urlopen('http://127.0.0.1:8999/', timeout=3).status==200 else 1)"]
+      interval: 30s
+      timeout: 5s
+      retries: 3
+      start_period: 10s
