@@ -1,9 +1,11 @@
 from __future__ import annotations
 
+import asyncio
 import logging
 import os
 import re
 import time
+from contextlib import asynccontextmanager
 from pathlib import Path
 
 from fastapi import FastAPI, HTTPException, Request
@@ -29,15 +31,22 @@ _APP_START_TIME = time.monotonic()
 # JSON fmt 仅当 LOG_JSON=1 才开；不传 fmt= 时由环境变量决定
 _configure_logging(level=os.environ.get("LOG_LEVEL", "INFO"))
 
-app = FastAPI(title="咸鱼之王自动点击器")
-templates = Jinja2Templates(directory=str(BASE_DIR / "templates"))
-app.mount("/static", StaticFiles(directory=str(BASE_DIR / "static")), name="static")
-
 adb = AdbClient()
 matcher = ImageMatcher(TEMPLATE_DIR)
 runner = TaskRunner(adb, matcher)
-repair_template_names()
-ensure_default_plan()
+
+
+@asynccontextmanager
+async def _lifespan(app: FastAPI):
+    # 模板名修复与默认方案生成涉及磁盘 IO，放到线程里跑，避免拖慢事件循环首帧。
+    await asyncio.to_thread(repair_template_names)
+    await asyncio.to_thread(ensure_default_plan)
+    yield
+
+
+app = FastAPI(title="咸鱼之王自动点击器", lifespan=_lifespan)
+templates = Jinja2Templates(directory=str(BASE_DIR / "templates"))
+app.mount("/static", StaticFiles(directory=str(BASE_DIR / "static")), name="static")
 
 
 class CropRequest(BaseModel):
@@ -137,31 +146,35 @@ async def crop_template(req: CropRequest) -> dict[str, str]:
 
 @app.get("/api/plans")
 async def api_list_plans() -> dict[str, object]:
-    return {"plans": [plan.__dict__ for plan in list_plans()]}
+    # 文件 IO（glob + read_text + json.loads）走线程：调用方是 async，不能再阻塞事件循环。
+    plans = await asyncio.to_thread(list_plans)
+    return {"plans": [plan.__dict__ for plan in plans]}
 
 
 @app.post("/api/plans")
 async def api_save_plan(req: PlanSaveRequest) -> dict[str, object]:
     try:
-        return save_plan(req).__dict__
+        saved = await asyncio.to_thread(save_plan, req)
     except ValueError as exc:
         raise HTTPException(status_code=400, detail=str(exc)) from exc
+    return saved.__dict__
 
 
 @app.get("/api/plans/{filename}")
 async def api_load_plan(filename: str) -> dict[str, object]:
     safe_name = _safe_plan_filename(filename)
     try:
-        return load_plan(safe_name).__dict__
+        plan = await asyncio.to_thread(load_plan, safe_name)
     except FileNotFoundError as exc:
         raise HTTPException(status_code=404, detail=str(exc)) from exc
+    return plan.__dict__
 
 
 @app.delete("/api/plans/{filename}")
 async def api_delete_plan(filename: str) -> Response:
     safe_name = _safe_plan_filename(filename)
     try:
-        delete_plan(safe_name)
+        await asyncio.to_thread(delete_plan, safe_name)
     except OSError as exc:
         raise HTTPException(status_code=409, detail=f"方案移出失败：{exc}") from exc
     return Response(status_code=204)

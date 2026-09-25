@@ -1,4 +1,4 @@
-﻿from __future__ import annotations
+from __future__ import annotations
 
 import json
 import os
@@ -35,7 +35,7 @@ class PlanPayload(BaseModel):
     roi_band: tuple[float, float] | None = Field(default=DEFAULT_ROI_BAND)
     freeze_guard: bool = True
     freeze_threshold: float = Field(default=3.0, ge=0, le=64)
-    freeze_max_waits: int = Field(default=4, ge=1, le=20)
+    freeze_max_waits: int = Field(default=6, ge=1, le=20)
 
 
 class PlanSaveRequest(BaseModel):

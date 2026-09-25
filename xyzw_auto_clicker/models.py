@@ -1,4 +1,4 @@
-﻿from __future__ import annotations
+from __future__ import annotations
 
 from dataclasses import dataclass
 from pathlib import Path
@@ -35,7 +35,9 @@ class TaskConfig:
     # 动作前等画面静止：消掉"截在动画中间"的无效重试（实测动画帧得分只有 0.318）
     freeze_guard: bool = True
     freeze_threshold: float = 3.0
-    freeze_max_waits: int = 4
+    # 默认 6 次：之前是 4，但晚高峰宝箱动画偶尔会拉到 5+ 帧，4 次不够稳；6 次
+    # 是 4.8s × 6 ≈ 28s 上限，留一倍余量给更慢的动画，又不至于把任务卡死。
+    freeze_max_waits: int = 6
 
     def templates_for_click(self, click_index: int) -> list[str]:
         if click_index == 0 and self.first_template_names:

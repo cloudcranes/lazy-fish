@@ -110,6 +110,10 @@ class _TemplateEntry:
 MIN_COARSE_TEMPLATE_PIXELS = 8
 MIN_COARSE_REGION_PIXELS = 16
 
+# 模板缓存上限：超出按 mtime 淘汰最旧的一个。16 对应 4 个默认按钮 × 4 个活动期，每个
+# 活动期都会换一遍同名按钮，留一倍余量防 OOM。
+TEMPLATES_CACHE_LIMIT = 16
+
 
 _fingerprint_cache: tuple[bytes, np.ndarray | None] | None = None
 
@@ -141,6 +145,11 @@ def frame_delta(previous: np.ndarray, current: np.ndarray) -> float:
 
 
 class ImageMatcher:
+    # ROI 矩形计算结果缓存：(height, width, band) -> (left, top, width, height)
+    # 同一帧里 _roi_band_rect 会被调用多次（每个模板一次），但画面尺寸与 profile.roi_band
+    # 在一轮里都是常量——把结果缓存住，避免每帧每模板都重算 int(...)。
+    _roi_rect_cache: dict[tuple[int, int, tuple[float, float] | None], tuple[int, int, int, int]] = {}
+
     def __init__(self, template_dir: Path) -> None:
         self.template_dir = template_dir
         self._templates: dict[str, _TemplateEntry] = {}
@@ -371,17 +380,30 @@ class ImageMatcher:
         self._scaled_order.append(key)
         return resized
 
-    @staticmethod
-    def _roi_band_rect(screenshot: np.ndarray, profile: MatchProfile) -> tuple[int, int, int, int]:
+    @classmethod
+    def _roi_band_rect(cls, screenshot: np.ndarray, profile: MatchProfile) -> tuple[int, int, int, int]:
+        """把 ROI 矩形的计算结果按 (画面尺寸, roi_band) 缓存住。
+
+        ponytail: 缓存上限跟着 class dict 自带；同一 (h, w, band) 只算一次。
+        在 _match_one 里每个模板都会调用一次，N 个模板 + 每帧重算就是 N 次冗余。
+        """
         height, width = screenshot.shape[:2]
+        cache_key = (height, width, profile.roi_band)
+        cached = cls._roi_rect_cache.get(cache_key)
+        if cached is not None:
+            return cached
         band = profile.roi_band
         if not band:
-            return 0, 0, width, height
-        top = max(0, min(height, int(height * band[0])))
-        bottom = max(top, min(height, int(height * band[1])))
-        if top == 0 and bottom == height:
-            return 0, 0, width, height
-        return 0, top, width, bottom - top
+            rect = (0, 0, width, height)
+        else:
+            top = max(0, min(height, int(height * band[0])))
+            bottom = max(top, min(height, int(height * band[1])))
+            if top == 0 and bottom == height:
+                rect = (0, 0, width, height)
+            else:
+                rect = (0, top, width, bottom - top)
+        cls._roi_rect_cache[cache_key] = rect
+        return rect
 
     def _template_entry(self, name: str) -> _TemplateEntry | None:
         path = self.template_dir / name
@@ -398,6 +420,11 @@ class ImageMatcher:
         # 模板变了就重建，顺带丢掉旧模板的尺度记忆
         entry = _TemplateEntry(mtime=mtime, image=image)
         self._templates[name] = entry
+        # 超出上限就按 mtime 淘汰最旧的：mtime 越老的越久没被覆盖，最先放弃。
+        if len(self._templates) > TEMPLATES_CACHE_LIMIT:
+            oldest_name = min(self._templates, key=lambda key: self._templates[key].mtime)
+            if oldest_name != name:
+                self._templates.pop(oldest_name, None)
         return entry
 
     def _read_image(self, path: Path) -> np.ndarray | None:

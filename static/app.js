@@ -1441,8 +1441,90 @@ async function init() {
 
   renderSummaries();
   applyLock();
-  setInterval(pollState, 1000);
+  startStatePolling();
   pollState();
 }
 
 init().catch((error) => toast(error.message, "error"));
+
+/* --------------------------------------------------------------------------
+   状态轮询：requestIdleCallback 退避 + 页面 hidden 时停轮询
+   --------------------------------------------------------------------------
+   setInterval(pollState, 1000) 在后台标签里也会每秒敲一次 /api/tasks/state，
+   既无谓耗 CPU 又无谓占网络。改用「任务在浏览器空闲时再安排下一次」：
+   - 跑完一轮 pollState 后用 requestIdleCallback（兜底 setTimeout）预约下一轮；
+   - 最小间隔 1000ms（正常运行仍是一秒一刷），间隔由 backoff 决定；
+   - 任务进行中用 MIN_POLL_MS；空闲/backoff 时拉长，最长 POLL_MAX_GAP_MS；
+   - 页面 hidden（visibilitychange）立刻停轮询，visible 后再起。 */
+
+const POLL_MIN_MS = 1000;
+const POLL_MAX_GAP_MS = 5000;
+
+let pollTimer = null;
+let pollIdleHandle = null;
+let lastPollAt = 0;
+let pollGap = POLL_MIN_MS;
+let pollingActive = false;
+
+function requestIdle(callback) {
+  if (typeof window.requestIdleCallback === "function") {
+    return window.requestIdleCallback(callback, { timeout: 500 });
+  }
+  return window.setTimeout(callback, 50);
+}
+
+function cancelIdleHandle(handle) {
+  if (handle == null) return;
+  if (typeof window.cancelIdleCallback === "function" && pollIdleHandle === handle) {
+    window.cancelIdleCallback(handle);
+  } else {
+    clearTimeout(handle);
+  }
+  pollIdleHandle = null;
+}
+
+function scheduleNextPoll() {
+  if (!pollingActive) return;
+  cancelIdleHandle(pollIdleHandle);
+  pollIdleHandle = requestIdle(async () => {
+    pollIdleHandle = null;
+    if (!pollingActive) return;
+    lastPollAt = Date.now();
+    await pollState();
+    if (!pollingActive) return;
+    if (stateStatus === "running" || stateStatus === "starting") {
+      pollGap = POLL_MIN_MS;
+    } else if (document.hidden) {
+      pollGap = POLL_MAX_GAP_MS;
+    } else {
+      // 空闲态逐渐拉长间隔，1s → 5s 指数退避
+      pollGap = Math.min(POLL_MAX_GAP_MS, Math.round(pollGap * 1.5));
+    }
+    scheduleNextPoll();
+  });
+}
+
+function startStatePolling() {
+  if (pollingActive) return;
+  pollingActive = true;
+  lastPollAt = 0;
+  pollGap = POLL_MIN_MS;
+  scheduleNextPoll();
+}
+
+function stopStatePolling() {
+  pollingActive = false;
+  cancelIdleHandle(pollIdleHandle);
+  if (pollTimer != null) {
+    clearTimeout(pollTimer);
+    pollTimer = null;
+  }
+}
+
+document.addEventListener("visibilitychange", () => {
+  if (document.hidden) {
+    stopStatePolling();
+  } else {
+    startStatePolling();
+  }
+});
