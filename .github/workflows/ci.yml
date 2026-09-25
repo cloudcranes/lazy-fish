@@ -61,14 +61,19 @@ jobs:
       - name: Set up Buildx
         uses: docker/setup-buildx-action@v3
 
+      # PR 上用 PR 编号当 scope，多个 PR 互不污染；main 上保留 mode=max 的全局 cache。
+      # 缓存只对 docker 任务本身有价值，不影响 test 任务。
       - name: Build image
         uses: docker/build-push-action@v6
         with:
           context: .
           push: false
           tags: lazy-fish:ci
-          cache-from: type=gha
-          cache-to: type=gha,mode=max
+          cache-from: |
+            type=gha,scope=${{ github.event.pull_request.number || 'main' }}
+            type=gha,scope=main
+          cache-to: |
+            type=gha,scope=${{ github.event.pull_request.number || 'main' }},mode=max
 
       - name: Smoke-run container
         run: |

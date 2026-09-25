@@ -52,6 +52,7 @@ const NAV_ITEMS = [
   ["capture", "截图采样"],
   ["logs", "运行日志"],
 ];
+const NAV_VIEWS = NAV_ITEMS.map(([key]) => key);
 
 let templatesCache = [];
 let plansCache = [];
@@ -67,6 +68,12 @@ let observedRun = false;   // 本次会话是否观察到任务真的跑起来�
 let alertSignature = null; // 当前告警条对应的状态指纹
 let dismissedAlert = null; // 已被用户关掉的告警指纹
 let isLocked = false;      // 任务是否运行中（disabled 状态的唯一真相）
+
+/* applyLock 命中集合：缓存 querySelectorAll 的结果，按 view 分桶。
+   状态轮询每秒都会触发 applyLock，全树扫描的代价不低；
+   模块作用域缓存 + 切视图 / 动态渲染后失效 = 节流不丢正确性。 */
+let lockedNodes = new Set();
+let lockedNodesByView = new Map();
 
 /* 执行次数快捷档位 */
 const COUNT_PRESETS = [10, 20, 30, 50, 100];
@@ -245,6 +252,9 @@ function setView(key) {
   const label = NAV_ITEMS.find(([item]) => item === key)?.[1] || "控制台";
   $("topbarTitle").textContent = label;
   if (key === "logs") scrollLogs();
+  // 切视图会让其他 view 的 [data-lock] 节点脱离可视 DOM，但 disabled 状态仍生效；
+  // 重建缓存让下一次的 applyLock 直接走命中集合，不再扫全树。
+  lockedNodes = new Set();
 }
 
 function focusNavItem(index) {
@@ -464,6 +474,35 @@ function renderSummaries() {
   updateHeroCopy();
 }
 
+/* 列出所有可被提交前检查的数字输入 id 与对应可读名。
+   checkValidity() 在提交前会扫一遍，把超界 / 类型不对的输入一次性报出来，
+   比只挑 #clickCount 一个字段更全面（threshold / interval 等同样能打错）。 */
+const NUMBER_FIELDS = [
+  ["clickCount", "十连次数"],
+  ["consoleCount", "十连次数（控制台镜像）"],
+  ["postClickWait", "点后等待"],
+  ["repeatTapCount", "后续连点次数"],
+  ["repeatTapGap", "连点间隔"],
+  ["interval", "匹配重试间隔"],
+  ["jitter", "随机抖动"],
+  ["maxMisses", "连续失败暂停"],
+  ["scaleMin", "最小尺度"],
+  ["scaleMax", "最大尺度"],
+  ["scaleStep", "尺度步长"],
+];
+
+function invalidNumberFields() {
+  const bad = [];
+  for (const [id, label] of NUMBER_FIELDS) {
+    const el = $(id);
+    if (!el) continue;
+    if (el.checkValidity && !el.checkValidity()) {
+      bad.push({ id, label, message: el.validationMessage || "输入不合法" });
+    }
+  }
+  return bad;
+}
+
 /* 执行次数的实时状态：档位高亮、校验、三处耗时估算。
    控制台与方案页用的是同一个 #clickCount 真相，这里负责把镜像同步过去。 */
 function renderCountState(p = currentPayload()) {
@@ -472,6 +511,12 @@ function renderCountState(p = currentPayload()) {
   const invalid = raw === "" || !Number.isFinite(count) || !Number.isInteger(count) || count < COUNT_MIN || count > COUNT_MAX;
   $("clickCount").classList.toggle("is-invalid", invalid);
   $("consoleCount").classList.toggle("is-invalid", invalid);
+  // .checkValidity() 走浏览器原生约束：min/max/step 都会校验，错误时挂红框。
+  const countEl = $("clickCount");
+  if (countEl.checkValidity && !countEl.checkValidity()) {
+    countEl.classList.add("is-invalid");
+    $("consoleCount").classList.add("is-invalid");
+  }
 
   for (const groupId of ["clickCountPicks", "consoleCountPicks"]) {
     for (const btn of $(groupId).querySelectorAll("button[data-value]")) {
@@ -682,6 +727,7 @@ function renderPlanActions(card, plan, armed) {
   card.classList.toggle("is-armed", armed);
   if (armed) row.querySelector('[data-act="confirm-delete"]')?.focus();
   // 新插入的节点要立刻跟上锁定状态，否则运行中会出现 1 秒的可点窗口
+  lockedNodes = new Set();
   applyLock();
 }
 
@@ -706,6 +752,8 @@ function renderPlans() {
   renderPlanChips();
   const grid = $("planGrid");
   grid.innerHTML = "";
+  // 方案卡是动态生成的：清缓存让 applyLock 重建命中集合
+  lockedNodes = new Set();
   for (const plan of plansCache) {
     const card = document.createElement("div");
     card.className = "plan-card";
@@ -757,6 +805,16 @@ async function savePlan({ overwrite = false } = {}) {
   const name = plan ? plan.name : $("planName").value.trim();
   if (!name) throw new Error("请先填写方案名称");
   const payload = currentPayload();
+  // 保存方案前同样做一次原生约束检查，否则后端 400 信息不会直达用户。
+  const bad = invalidNumberFields();
+  if (bad.length) {
+    const summary = bad.map(({ label, message }) => `${label}：${message}`).join("；");
+    const first = bad[0];
+    toast(`参数超出范围——${summary}`, "error");
+    $(first.id)?.focus();
+    $(first.id)?.select?.();
+    return;
+  }
   validatePayload(payload);
   const isDefault = plan ? plan.default : $("planDefault").checked;
   const saved = await api("/api/plans", { method: "POST", body: JSON.stringify({ name, payload, default: isDefault }) });
@@ -856,6 +914,8 @@ async function loadTemplates({ keepPayload = true } = {}) {
   applyPayload(payload);
   clearTemplateMissing();
   renderTemplateOptions();
+  // 模板网格是动态重建的：清掉缓存让下一次 applyLock 走命中集合
+  lockedNodes = new Set();
   renderSummaries();
 }
 
@@ -1010,6 +1070,17 @@ async function saveTemplate() {
 
 async function startTask() {
   const payload = currentPayload();
+  // 提交前先用浏览器原生的 checkValidity() 把超界 / 类型不对的数字输入一次扫干净，
+  // 比依赖后端 422 更早给反馈；同时按 id 定位到字段，反馈比后端的 detail 更具体。
+  const bad = invalidNumberFields();
+  if (bad.length) {
+    const summary = bad.map(({ label, message }) => `${label}：${message}`).join("；");
+    const first = bad[0];
+    toast(`参数超出范围——${summary}`, "error");
+    $(first.id)?.focus();
+    $(first.id)?.select?.();
+    return;
+  }
   validatePayload(payload);
   lastPayload = payload;
   dismissedAlert = null;
@@ -1041,16 +1112,52 @@ function setLocked(isRunning) {
 }
 
 /* disabled 状态的唯一归属地：派发锁定 + 步进器的边界禁用。
-   若各处分散设置 disabled，运行中就会被后续 renderSummaries 覆盖掉。 */
+   若各处分散设置 disabled，运行中就会被后续 renderSummaries 覆盖掉。
+
+   querySelectorAll 在每帧都执行一次成本不低（状态轮询每秒会触发多次）；
+   把命中集合缓存到 module scope，按 view 重建——切视图时旧视图的 disabled
+   节点会被 DOM 卸载，下次重建即可，无需每次全树扫描。 */
+function rebuildLockedNodes() {
+  const nodes = document.querySelectorAll(
+    "[data-lock], #savePlan, #applyRecommended, #applyRecommended2, #loadDevices, #shotBtn, #saveTemplate, #refreshTemplates, #savePlanFromConsole, #resumeBtn, #runAlertAction, #updatePlan, #startBtn, #stopBtn, #clickCountMinus, #clickCountPlus, #consoleCountMinus, #consoleCountPlus",
+  );
+  lockedNodes = new Set(nodes);
+  // 按 view 分桶：当前活跃 view 的节点全集 = lockedNodes ∪ 该 view 的节点
+  for (const key of NAV_VIEWS) lockedNodesByView.set(key, new Set());
+  for (const node of nodes) {
+    const view = node.closest("[id^=\"view-\"]");
+    if (!view) continue;
+    const key = view.id.slice("view-".length);
+    lockedNodesByView.get(key)?.add(node);
+  }
+}
+
+function lockedNodesForView(viewKey) {
+  // viewKey=null 表示「当前无活跃 view」，仍要保留 module-scope 节点（顶栏按钮等）
+  if (!lockedNodesByView.size) rebuildLockedNodes();
+  if (!viewKey) return lockedNodes;
+  const viewNodes = lockedNodesByView.get(viewKey);
+  if (!viewNodes) return lockedNodes;
+  const union = new Set(lockedNodes);
+  for (const node of viewNodes) union.add(node);
+  return union;
+}
+
 function applyLock() {
-  document.querySelectorAll("[data-lock], #savePlan, #applyRecommended, #applyRecommended2, #loadDevices, #shotBtn, #saveTemplate, #refreshTemplates, #savePlanFromConsole, #resumeBtn, #runAlertAction, #updatePlan").forEach((item) => {
+  // 首次调用 / 视图切换后重建缓存（renderPlans / renderTemplates 等会替换 grid）
+  if (!lockedNodes.size) rebuildLockedNodes();
+  const nodes = lockedNodesForView(currentView());
+  for (const item of nodes) {
     if (item.id === "runAlertAction" && !isLocked) {
       item.disabled = false;
-      return;
+      continue;
     }
-    if (item.id === "updatePlan") item.disabled = isLocked || item.hidden;
-    else item.disabled = isLocked;
-  });
+    if (item.id === "updatePlan") {
+      item.disabled = isLocked || item.hidden;
+      continue;
+    }
+    item.disabled = isLocked;
+  }
   $("startBtn").disabled = isLocked;
   $("stopBtn").disabled = !isLocked;
 
@@ -1111,9 +1218,18 @@ async function pollState() {
     $("ringLabel").textContent = text;
 
     const percent = Number(state.progress_percent || 0);
+    const target = Number(state.target || 0);
+    const clicked = Number(state.clicked || 0);
     $("ringFill").style.strokeDashoffset = String(339.292 * (1 - percent / 100));
     $("ringFill").setAttribute("class", `ring-fill ${RING_TONE[status] || "status-tone-idle"}`);
-    $("ringValue").textContent = `${state.clicked || 0} / ${state.target || 0}`;
+    $("ringValue").textContent = `${clicked} / ${target}`;
+    // 同步无障碍进度：aria-valuenow/min/max + 可读的 aria-valuetext，
+    // 配合 progressbar 角色 + aria-live，屏幕阅读器能像 progress 一样播报。
+    const ring = $("ring");
+    ring.setAttribute("aria-valuemin", "0");
+    ring.setAttribute("aria-valuemax", String(target));
+    ring.setAttribute("aria-valuenow", String(clicked));
+    ring.setAttribute("aria-valuetext", `${clicked} / ${target}`);
     $("startBtn").textContent = running ? "执行中…" : "开始执行";
 
     // 首屏只回答「现在能不能跑」；跑到哪了 / 为什么停了交给状态环与告警条

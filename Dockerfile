@@ -1,34 +1,51 @@
 # syntax=docker/dockerfile:1.7
 #
-# 镜像大小估算（参考值，需以 docker images 实测为准）:
-#   - python:3.12-slim         ~  130 MB
-#   - apt runtime deps (libgl1 + libglib2.0-0)  ~   15 MB
-#   - opencv-python-headless 4.x                 ~   45 MB
-#   - 其余 Python 依赖（fastapi/uvicorn/numpy/pydantic/jinja2） ~   60 MB
-#   - 应用代码 + 占位 data 目录                  ~    1 MB
-# 合计目标: < 260 MB（PR-4 前 ≈ 360 MB；libsm6/libxrender1/libxext6 砍掉 ≈ -8 MB；opencv-python → headless ≈ -30 MB；apt --no-install-recommends + lists 清理 ≈ -50 MB）。
-FROM python:3.12-slim AS base
+# 多阶段构建（PR-6 契约+可维护）：
+#   builder  —— 全套 python:3.12-slim + 编译工具，装齐依赖（含 setuptools/wheel）。
+#               pip 下载 + 构建只在第一阶段，site-packages 复用给 runtime。
+#   runtime  —— 与 builder 同 base，但只 COPY site-packages + 源码；
+#               运行时 apt 只装 opencv 真正需要的 libgl1 + libglib2.0-0。
+# 体积目标：< 230 MB（PR-4 ≈ 260 MB；省下 pip / build-base / 缓存约 30 MB）。
+#
+# 数据目录（模板/方案/截图缓存）由挂载提供；镜像里只建占位以满足容器自检。
+FROM python:3.12-slim AS builder
+
+ENV PYTHONDONTWRITEBYTECODE=1 \
+    PYTHONUNBUFFERED=1 \
+    PIP_NO_CACHE_DIR=1 \
+    PIP_DISABLE_PIP_VERSION_CHECK=1
+
+WORKDIR /build
+
+# builder 阶段：装依赖到 /install（独立 prefix，便于 COPY 复用）。
+# 不要把 build-essential 写进 runtime：编译工具链本身就要 300+ MB，
+# runtime 只需要 wheel 已经预编译好的 site-packages。
+COPY requirements.txt ./
+RUN pip install --prefix=/install -r requirements.txt
+
+
+FROM python:3.12-slim AS runtime
 
 ENV PYTHONDONTWRITEBYTECODE=1 \
     PYTHONUNBUFFERED=1 \
     PIP_NO_CACHE_DIR=1 \
     PIP_DISABLE_PIP_VERSION_CHECK=1 \
     LAZY_FISH_HOST=0.0.0.0 \
-    LAZY_FISH_PORT=8999
+    LAZY_FISH_PORT=8999 \
+    PATH="/install/bin:${PATH}" \
+    PYTHONPATH="/install/lib/python3.12/site-packages"
 
 # 运行时只装 opencv-python-headless 实际需要的两个系统库。
-# libsm6/libxrender1/libxext6 是 opencv-python（非 headless）的 GUI 依赖，headless 用不上。
-# 合并 RUN 层 + --no-install-recommends + 清理 apt lists，缩小镜像约 50MB。
+# 合并 RUN 层 + --no-install-recommends + 清理 apt lists。
 RUN apt-get update \
  && apt-get install -y --no-install-recommends \
         libgl1 \
         libglib2.0-0 \
  && rm -rf /var/lib/apt/lists/*
 
+# builder 阶段的 site-packages 复用进来；COPY --from 不会带 pip / build-base。
+COPY --from=builder /install /install
 WORKDIR /app
-
-COPY requirements.txt ./
-RUN pip install -r requirements.txt
 
 COPY pyproject.toml ./
 COPY xyzw_auto_clicker ./xyzw_auto_clicker

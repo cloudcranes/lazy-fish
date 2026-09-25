@@ -1,16 +1,19 @@
 from __future__ import annotations
 
 import json
+import logging
 import os
 import re
 import tempfile
 from dataclasses import dataclass
 from pathlib import Path
 
-from pydantic import BaseModel, Field
+from pydantic import BaseModel, ConfigDict, Field, ValidationError
 
 from .matcher import DEFAULT_ROI_BAND, DEFAULT_SCALE_MAX, DEFAULT_SCALE_MIN, DEFAULT_SCALE_STEP
 from .settings import DATA_DIR, TRASH_DIR, fix_mojibake_name
+
+logger = logging.getLogger(__name__)
 
 PLAN_DIR = DATA_DIR / "plans"
 PLAN_DIR.mkdir(parents=True, exist_ok=True)
@@ -42,6 +45,14 @@ class PlanSaveRequest(BaseModel):
     name: str = Field(min_length=1, max_length=80)
     payload: PlanPayload
     default: bool = False
+
+
+class PlanPayloadStrict(PlanPayload):
+    """加载时专用严格 schema：未知字段直接拒收，类型严格校验。
+
+    字段与 PlanPayload 一一对应（继承即可），仅多挂一个 extra='forbid' 配置。
+    不要给生产写入路径的 PlanPayload 加这个配置：前端加新字段时会一起死。"""
+    model_config = ConfigDict(extra="forbid")
 
 
 @dataclass(frozen=True)
@@ -100,6 +111,24 @@ def list_plans() -> list[SavedPlan]:
     return sorted(plans, key=lambda item: (not item.default, item.name))
 
 
+def _normalize_loaded_payload(raw: dict[str, object]) -> dict[str, object]:
+    """Load plan payload with pydantic v2 model_validate + strict mode.
+
+    严格模式 = 未知字段拒收 + 类型严格；缺字段走 PlanPayload 默认值兜底并记日志。
+    旧方案文件没有 scale_* 等识别字段时不能让 UI 一打开就红一片，但脏字段必须拒收。
+    用独立严格 schema 而非给 PlanPayload 加 extra='forbid'，避免影响前端写入路径。
+
+    返回兜底后的 payload dict；校验失败转成 ValueError 带可读前缀。
+    """
+    try:
+        validated = PlanPayloadStrict.model_validate(raw)
+    except ValidationError as exc:
+        logger.warning("plan payload 严格校验失败：%s", exc.errors())
+        first = exc.errors()[0] if exc.errors() else {"msg": "未知字段"}
+        raise ValueError(f"方案字段无效：{first.get('msg', '未知字段')}") from exc
+    return validated.model_dump()
+
+
 def save_plan(req: PlanSaveRequest) -> SavedPlan:
     filename = safe_plan_filename(req.name)
     path = PLAN_DIR / filename
@@ -138,10 +167,42 @@ def load_plan(filename: str) -> SavedPlan:
     if not path.exists():
         raise FileNotFoundError("方案不存在")
     data = json.loads(path.read_text(encoding="utf-8"))
+    raw_payload = dict(data.get("payload") or {})
+    # 严格模式：未知字段直接拒收；缺字段走 PlanPayload 默认值兜底并记日志。
+    # _normalize_loaded_payload 内部已经把 pydantic 错误转成带前缀的 ValueError，
+    # 这里再抛一次给 FastAPI，最终前端收到 400 + 可读 detail。
+    normalized = _normalize_loaded_payload(raw_payload)
+    # 只对"识别类可选字段"的缺失打 info 日志（必要字段缺则会被 pydantic 拒收）；
+    # 必要字段缺失的拒绝日志在 _normalize_loaded_payload 里已经 warning 过。
+    fillable_keys = (
+        "device_id",
+        "first_template_names",
+        "interval_seconds",
+        "jitter_seconds",
+        "post_click_wait_seconds",
+        "repeat_tap_count",
+        "repeat_tap_gap_seconds",
+        "threshold",
+        "max_misses",
+        "scale_min",
+        "scale_max",
+        "scale_step",
+        "roi_band",
+        "freeze_guard",
+        "freeze_threshold",
+        "freeze_max_waits",
+    )
+    missing = [key for key in fillable_keys if key not in raw_payload]
+    if missing:
+        logger.info(
+            "plan %s 缺字段 %s，已用默认值兜底（避免旧方案打不开）",
+            path.name,
+            "、".join(missing),
+        )
     return SavedPlan(
         name=str(data.get("name") or path.stem),
         filename=path.name,
-        payload=dict(data.get("payload") or {}),
+        payload=normalized,
         default=bool(data.get("default", False)),
     )
 

@@ -112,7 +112,9 @@
                 <p class="console-hero-desc" id="heroDesc">当前未加载运行参数。前往「方案与参数」选择或套用推荐方案。</p>
               </div>
               <div class="console-actions">
-                <div class="ring" id="ring" role="img" aria-label="执行进度">
+                <div class="ring" id="ring" role="progressbar" tabindex="0"
+                     aria-label="执行进度" aria-live="polite" aria-atomic="true"
+                     aria-valuemin="0" aria-valuemax="0" aria-valuenow="0" aria-valuetext="0 / 0">
                   <svg viewBox="0 0 120 120" aria-hidden="true">
                     <circle class="ring-track" cx="60" cy="60" r="54" />
                     <circle class="ring-fill" id="ringFill" cx="60" cy="60" r="54" />

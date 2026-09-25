@@ -2154,6 +2154,64 @@ pre,
   }
 }
 
+/* 中间断点：平板横屏 / 小桌面（720–900px）。
+   大屏下侧栏占 232px、卡片 4 列；中屏把侧栏收紧到图标列，
+   方案 / 模板网格从 4 列降到 2–3 列，避免卡片被挤瘦到不可读。
+   < 720 已有 max-width: 900px 那条切到底栏；这里只处理"侧栏仍在，但放不下两列卡片"的中间档。 */
+@media (min-width: 720px) and (max-width: 900px) {
+  :root {
+    --nav-w: 64px;
+    --nav-w-collapsed: 64px;
+    --content-max: 100%;
+  }
+  .app.nav-collapsed {
+    --nav-w: 64px;
+  }
+  .nav {
+    padding: var(--sp-3) var(--sp-1);
+  }
+  .nav-brand,
+  .nav-group,
+  .nav-foot .nav-mini-label,
+  .nav-foot .nav-mini {
+    display: none;
+  }
+  .nav-item,
+  .nav-mini {
+    justify-content: center;
+    padding: var(--sp-2) var(--sp-1);
+  }
+  .nav-item span:not(.nav-item-badge) {
+    display: none;
+  }
+  .nav-item-badge {
+    margin-left: 0;
+  }
+  .console-hero {
+    grid-template-columns: minmax(0, 1fr) auto;
+    gap: var(--sp-4);
+    padding: var(--sp-5);
+  }
+  .console-hero-title {
+    font-size: var(--fs-24);
+  }
+  .plan-grid {
+    grid-template-columns: repeat(auto-fill, minmax(200px, 1fr));
+  }
+  .tpl-grid {
+    grid-template-columns: repeat(auto-fill, minmax(168px, 1fr));
+  }
+  .metrics {
+    grid-template-columns: repeat(3, minmax(0, 1fr));
+  }
+  .topbar {
+    padding: 0 var(--sp-4);
+  }
+  .content {
+    padding: var(--sp-4);
+  }
+}
+
 @media (max-width: 900px) {
   .app {
     grid-template-columns: minmax(0, 1fr);
