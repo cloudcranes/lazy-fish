@@ -1,0 +1,20 @@
+# CODEOWNERS — lazy-fish
+# Anyone listed here is auto-requested as a reviewer on PRs touching the path.
+# Use GitHub branch protection to make approval from an owner a hard requirement.
+
+# Default owners for everything in the repo.
+/                       @cloudcranes
+
+# Match / recognition pipeline — changes here warrant extra review.
+xyzw_auto_clicker/matcher.py  @cloudcranes
+xyzw_auto_clicker/runner.py   @cloudcranes
+docs/RECOGNITION-RESEARCH.md  @cloudcranes
+
+# Build / deploy / CI.
+Dockerfile              @cloudcranes
+docker-compose.yml      @cloudcranes
+.github/workflows/      @cloudcranes
+
+# WebUI design tokens & layout.
+static/tokens.css       @cloudcranes
+static/app.css          @cloudcranes

@@ -1,7 +1,11 @@
 services:
   lazy-fish:
-    build: .
-    image: lazy-fish:latest
+    # Use the published image by default; override with `docker compose build`
+    # or set COMPOSE_TAG=dev to build from local source.
+    image: ghcr.io/cloudcranes/lazy-fish:${COMPOSE_TAG:-latest}
+    build:
+      context: .
+      dockerfile: Dockerfile
     container_name: lazy-fish
     restart: unless-stopped
     ports:
