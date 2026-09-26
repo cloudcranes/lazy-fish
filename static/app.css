@@ -1,5 +1,5 @@
-﻿/* ==========================================================================
-   鍜搁奔涔嬬帇鍔╂墜 路 鍩虹閲嶇疆
+/* ==========================================================================
+   咸鱼之王助手 · 基础重置
    ========================================================================== */
 
 *,
@@ -90,7 +90,7 @@ pre,
   border: 0;
 }
 
-/* 缁嗘粴鍔ㄦ潯 */
+/* 细滚动条 */
 .scroll-y {
   scrollbar-width: thin;
   scrollbar-color: var(--border-strong) transparent;
@@ -108,7 +108,7 @@ pre,
 }
 
 /* ==========================================================================
-   鎺掔増宸ュ叿绫?
+   排版工具类
    ========================================================================== */
 
 .eyebrow {
@@ -144,7 +144,7 @@ pre,
 }
 
 /* ==========================================================================
-   搴旂敤楠ㄦ灦
+   应用骨架
    ========================================================================== */
 
 .app {
@@ -153,7 +153,7 @@ pre,
   min-height: 100vh;
 }
 
-/* ---------- 渚ц竟瀵艰埅 ---------- */
+/* ---------- 侧边导航 ---------- */
 .nav {
   display: flex;
   flex-direction: column;
@@ -279,7 +279,7 @@ pre,
   color: var(--text-primary);
 }
 
-/* 鎶樺彔鎬?*/
+/* 折叠态 */
 .app.nav-collapsed {
   --nav-w: var(--nav-w-collapsed);
 }
@@ -297,7 +297,7 @@ pre,
   display: none;
 }
 
-/* ---------- 涓诲尯鍩?---------- */
+/* ---------- 主区域 ---------- */
 .main {
   display: flex;
   flex-direction: column;
@@ -380,7 +380,7 @@ pre,
 }
 
 /* ==========================================================================
-   缁勪欢锛氬崱鐗?/ 鍒嗙粍
+   组件：卡片 / 分组
    ========================================================================== */
 
 .card {
@@ -448,12 +448,12 @@ pre,
 .section-label {
   font-size: var(--fs-12);
   font-weight: 600;
-  color: var(--text-secondary);
+  color: var(--text-tertiary);
   letter-spacing: 0.02em;
 }
 
 /* ==========================================================================
-   缁勪欢锛氭寜閽?
+   组件：按钮
    ========================================================================== */
 
 .btn {
@@ -553,7 +553,7 @@ pre,
   flex: none;
 }
 
-/* 鍗遍櫓鎰忓浘浜屾纭 */
+/* 危险意图二次确认 */
 .btn.btn-quiet-danger {
   background: transparent;
   color: var(--text-secondary);
@@ -566,7 +566,7 @@ pre,
 }
 
 /* ==========================================================================
-   缁勪欢锛氳〃鍗?
+   组件：表单
    ========================================================================== */
 
 .field {
@@ -639,7 +639,7 @@ pre,
 .select:disabled,
 .btn:disabled {
   background: var(--surface-sunken);
-  color: var(--text-secondary);
+  color: var(--text-tertiary);
   cursor: not-allowed;
 }
 
@@ -662,7 +662,7 @@ pre,
   position: absolute;
   right: var(--sp-3);
   font-size: var(--fs-11);
-  color: var(--text-secondary);
+  color: var(--text-tertiary);
   pointer-events: none;
 }
 .input-suffix .input {
@@ -690,7 +690,7 @@ pre,
   flex: 1;
 }
 
-/* 寮€鍏?*/
+/* 开关 */
 .switch {
   display: inline-flex;
   align-items: center;
@@ -736,7 +736,7 @@ pre,
   box-shadow: var(--focus-ring);
 }
 
-/* 鍒嗘鎺т欢 */
+/* 分段控件 */
 .segmented {
   display: inline-flex;
   padding: 3px;
@@ -761,7 +761,7 @@ pre,
   box-shadow: var(--elev-1);
 }
 
-/* 婊戝潡 */
+/* 滑块 */
 .range {
   -webkit-appearance: none;
   appearance: none;
@@ -806,7 +806,7 @@ pre,
   box-shadow: var(--focus-ring);
 }
 
-/* 澶嶉€夋 / 鍗曢€?*/
+/* 复选框 / 单选 */
 .checkline {
   display: inline-flex;
   align-items: center;
@@ -825,7 +825,7 @@ pre,
 }
 
 /* ==========================================================================
-   缁勪欢锛氱姸鎬?/ 寰界珷 / 杩涘害
+   组件：状态 / 徽章 / 进度
    ========================================================================== */
 
 .pill {
@@ -876,8 +876,8 @@ pre,
   color: var(--brand-700);
   border-color: var(--brand-200);
 }
-/* 娣辫壊涓嬩笉闇€瑕佽鐩栵細--brand-050/--brand-700/--brand-200 宸插湪 tokens.css 閲嶆柊鏄犲皠
-   锛堝師鍏堣鐩栨垚 brand-200 搴?+ brand-100 瀛楋紝鏄繁妫曢厤娣辨锛屽姣斿害绾?1.4:1锛?*/
+/* 深色下不需要覆盖：--brand-050/--brand-700/--brand-200 已在 tokens.css 重新映射
+   （原先覆盖成 brand-200 底 + brand-100 字，是深棕配深棕，对比度约 1.4:1） */
 
 .pill.live .pill-dot {
   animation: pulse 1.6s var(--ease-in-out) infinite;
@@ -892,7 +892,7 @@ pre,
   }
 }
 
-/* 杩涘害鏉?*/
+/* 进度条 */
 .progress {
   height: 6px;
   border-radius: var(--r-full);
@@ -909,7 +909,7 @@ pre,
   height: 10px;
 }
 
-/* 鎸囨爣鍗?*/
+/* 指标卡 */
 .metrics {
   display: grid;
   gap: var(--sp-3);
@@ -952,7 +952,7 @@ pre,
   color: var(--text-secondary);
 }
 
-/* 鍛婅鏉★細鎶婂悗绔?last_error 绛夌姸鎬佹樉寮忔姮鍒伴灞?*/
+/* 告警条：把后端 last_error 等状态显式抬到首屏 */
 .alert {
   display: flex;
   align-items: flex-start;
@@ -1047,7 +1047,7 @@ pre,
 }
 
 /* ==========================================================================
-   瑙嗗浘锛氭帶鍒跺彴
+   视图：控制台
    ========================================================================== */
 
 .console-hero {
@@ -1089,7 +1089,7 @@ pre,
   gap: var(--sp-3);
 }
 
-/* 鐘舵€佺幆 */
+/* 状态环 */
 .ring {
   position: relative;
   width: 132px;
@@ -1132,7 +1132,7 @@ pre,
 }
 .ring-label {
   font-size: var(--fs-11);
-  color: var(--text-secondary);
+  color: var(--text-tertiary);
 }
 
 .status-tone-running {
@@ -1166,7 +1166,7 @@ pre,
   display: flex;
 }
 
-/* 璁惧瀹炴椂鐢婚潰锛氭秷璐瑰悗绔?state.last_screenshot */
+/* 设备实时画面：消费后端 state.last_screenshot */
 .live-shot-body {
   padding: var(--sp-4);
   align-items: center;
@@ -1270,8 +1270,8 @@ pre,
   text-overflow: ellipsis;
   white-space: nowrap;
 }
-/* 涓?<dt>/<dd> 绛変环鐨勮涔夛細鏍囩 + 鍊硷紱鐢ㄤ簬鎶?鎵ц姒傝"浠?<dl> 鎹㈡垚 <section> 鍚?
-   淇濇寔瑙嗚涓€鑷淬€係afari + VoiceOver 瀵?<dl> 鐨勬挱鎶ュ瓨鍦?a11y 闂锛屾敼鐢ㄦ櫘閫?span銆?*/
+/* 与 <dt>/<dd> 等价的语义：标签 + 值；用于把"执行概要"从 <dl> 换成 <section> 后
+   保持视觉一致。Safari + VoiceOver 对 <dl> 的播报存在 a11y 问题，改用普通 span。 */
 .quick-row .quick-label {
   color: var(--text-secondary);
 }
@@ -1293,7 +1293,7 @@ pre,
 }
 
 /* ==========================================================================
-   瑙嗗浘锛氭柟妗堜笌鍙傛暟
+   视图：方案与参数
    ========================================================================== */
 
 .plan-grid {
@@ -1302,7 +1302,7 @@ pre,
   grid-template-columns: repeat(auto-fill, minmax(240px, 1fr));
 }
 
-/* 鏂规鍗★細鏁村崱鍙偣 = 杞藉叆鍙傛暟锛堟渶楂橀鍔ㄤ綔锛夛紝娆¤鎿嶄綔鍐呰仈鍦ㄥ崱鍐?*/
+/* 方案卡：整卡可点 = 载入参数（最高频动作），次要操作内联在卡内 */
 .plan-card {
   position: relative;
   display: flex;
@@ -1323,7 +1323,7 @@ pre,
   border-color: var(--brand-400);
   box-shadow: 0 0 0 1px var(--brand-400);
 }
-/* 灞曞紑鎸夐挳瑕嗙洊鏁村崱锛岃鍗＄墖淇濇寔璇箟涓婄殑銆屾寜閽€嶈€屽唴閮ㄨ繕鑳芥斁鐪熷疄鎸夐挳 */
+/* 展开按钮覆盖整卡，让卡片保持语义上的「按钮」而内部还能放真实按钮 */
 .plan-card-hit {
   position: absolute;
   inset: 0;
@@ -1375,7 +1375,7 @@ pre,
 }
 .plan-card-meta {
   font-size: var(--fs-11);
-  color: var(--text-secondary);
+  color: var(--text-tertiary);
   font-family: var(--font-mono);
   word-break: break-all;
   line-height: 1.6;
@@ -1395,7 +1395,7 @@ pre,
   flex-wrap: wrap;
   gap: var(--sp-1) var(--sp-2);
   font-size: var(--fs-11);
-  color: var(--text-secondary);
+  color: var(--text-tertiary);
 }
 .plan-card-roles b {
   color: var(--text-secondary);
@@ -1418,8 +1418,8 @@ pre,
 .plan-card-actions .btn-icon {
   flex: none;
 }
-/* 鍒犻櫎鐨勫唴鑱斾簩娆＄‘璁わ細鎶?纭 / 鍙栨秷"鏀惧湪鍗＄墖鑷繁鐨勬搷浣滆閲岋紝
-   涓嶄緷璧栧師鐢?confirm()锛堟矙绠?iframe 浼氶潤榛樿繑鍥?false锛?*/
+/* 删除的内联二次确认：把"确认 / 取消"放在卡片自己的操作行里，
+   不依赖原生 confirm()（沙箱 iframe 会静默返回 false） */
 .plan-card-actions.is-armed {
   flex-direction: column;
   align-items: stretch;
@@ -1447,7 +1447,7 @@ pre,
   border-color: var(--danger-br);
   box-shadow: 0 0 0 1px var(--danger-br);
 }
-/* 鏂规鍗″唴鐨勫浘鏍囨寜閽細榛樿涓庡崱鐗囧悓鑹诧紝hover 鎵嶆樉褰紝閬垮厤鎶富鎿嶄綔鐒︾偣 */
+/* 方案卡内的图标按钮：默认与卡片同色，hover 才显形，避免抢主操作焦点 */
 .btn-icon {
   display: inline-grid;
   place-items: center;
@@ -1457,7 +1457,7 @@ pre,
   border: 1px solid transparent;
   border-radius: var(--r-md);
   background: transparent;
-  color: var(--text-secondary);
+  color: var(--text-tertiary);
   cursor: pointer;
   transition: background var(--dur-fast), color var(--dur-fast), border-color var(--dur-fast);
 }
@@ -1476,7 +1476,7 @@ pre,
   cursor: not-allowed;
 }
 
-/* 褰撳墠鐢熸晥鏂规鐘舵€佹潯 */
+/* 当前生效方案状态条 */
 .plan-bar {
   display: flex;
   align-items: center;
@@ -1527,7 +1527,7 @@ pre,
 }
 
 /* ==========================================================================
-   鏁板€艰緭鍏ュ寮猴細蹇嵎妗ｄ綅 + 姝ヨ繘鍣?+ 瀹炴椂浼扮畻
+   数值输入增强：快捷档位 + 步进器 + 实时估算
    ========================================================================== */
 
 .picks {
@@ -1562,7 +1562,7 @@ pre,
   cursor: not-allowed;
 }
 
-/* 姝ヨ繘鍣細杈撳叆妗嗕袱渚?卤 */
+/* 步进器：输入框两侧 ± */
 .stepper {
   display: flex;
   align-items: stretch;
@@ -1595,7 +1595,7 @@ pre,
   box-shadow: 0 0 0 3px var(--danger-br);
 }
 
-/* 鑰楁椂浼扮畻 */
+/* 耗时估算 */
 .estimate {
   display: flex;
   align-items: center;
@@ -1630,8 +1630,8 @@ pre,
 }
 
 /* ==========================================================================
-   鎺у埗鍙拌繍琛岄厤缃細鏂规鑺墖 + 娆℃暟
-   鎶娿€岃窇涔嬪墠瑕佸仛鐨勪袱涓喅瀹氥€嶆斁鍥為灞忥紝閬垮厤涓轰簡鎹釜鏂规璺宠鍥?
+   控制台运行配置：方案芯片 + 次数
+   把「跑之前要做的两个决定」放回首屏，避免为了换个方案跳视图
    ========================================================================== */
 
 .run-config-body {
@@ -1649,7 +1649,7 @@ pre,
   flex-wrap: wrap;
   gap: var(--sp-2);
 }
-/* 鑺墖鏄姩鎬佺敓鎴愮殑鎸夐挳锛岄渶鏄惧紡缁ф壙鎸夐挳鐨勫瓧浣撲笌鐩掓ā鍨?*/
+/* 芯片是动态生成的按钮，需显式继承按钮的字体与盒模型 */
 .plan-chip {
   display: flex;
   flex-direction: column;
@@ -1761,7 +1761,7 @@ pre,
   justify-self: start;
 }
 
-/* 鎶樺彔鐨勯珮绾ч」锛氶粯璁ゆ敹璧凤紝閬垮厤涓昏〃鍗曡浣庨鍙傛暟娣规病 */
+/* 折叠的高级项：默认收起，避免主表单被低频参数淹没 */
 .advanced {
   margin-top: var(--sp-1);
   padding-top: var(--sp-3);
@@ -1782,14 +1782,14 @@ pre,
   display: none;
 }
 .advanced-head::before {
-  content: "鈻?;
+  content: "▸";
   flex: none;
   width: 10px;
   font-size: var(--fs-11);
-  color: var(--text-secondary);
+  color: var(--text-tertiary);
 }
 .advanced[open] .advanced-head::before {
-  content: "鈻?;
+  content: "▾";
 }
 .advanced-head:hover {
   color: var(--text-primary);
@@ -1816,7 +1816,7 @@ pre,
 }
 
 /* ==========================================================================
-   瑙嗗浘锛氭ā鏉跨鐞?
+   视图：模板管理
    ========================================================================== */
 
 .tpl-grid {
@@ -1862,7 +1862,7 @@ pre,
 }
 .tpl-thumb-empty {
   font-size: var(--fs-11);
-  color: var(--text-secondary);
+  color: var(--text-tertiary);
 }
 .tpl-name {
   font-size: var(--fs-12);
@@ -1895,14 +1895,14 @@ pre,
 .empty-state {
   padding: var(--sp-8);
   text-align: center;
-  color: var(--text-secondary);
+  color: var(--text-tertiary);
   font-size: var(--fs-13);
   border: 1px dashed var(--border-default);
   border-radius: var(--r-lg);
 }
 
 /* ==========================================================================
-   瑙嗗浘锛氭埅鍥鹃噰鏍?
+   视图：截图采样
    ========================================================================== */
 
 .shot-layout {
@@ -1984,7 +1984,7 @@ pre,
   border-radius: var(--r-xs);
 }
 
-/* 閲囨牱椤碉細妯℃澘鍚嶅懡涓凡鏈夋枃浠舵椂鐨勮鐩栨彁绀猴紙缂╃暐鍥?+ 璇存槑锛?*/
+/* 采样页：模板名命中已有文件时的覆盖提示（缩略图 + 说明） */
 .tpl-target {
   display: flex;
   align-items: center;
@@ -1994,7 +1994,7 @@ pre,
   background: var(--warn-bg);
   border-radius: var(--r-md);
 }
-/* [hidden] 鍦?UA 鏍峰紡閲屽彧鏈?display:none锛屼綔鑰呮牱寮忛噷鐨?display:flex 浼氱洊鎺夊畠锛屽繀椤绘樉寮忓帇鍥炲幓 */
+/* [hidden] 在 UA 样式里只有 display:none，作者样式里的 display:flex 会盖掉它，必须显式压回去 */
 .tpl-target[hidden] {
   display: none;
 }
@@ -2035,7 +2035,7 @@ pre,
 }
 
 /* ==========================================================================
-   瑙嗗浘锛氭棩蹇?
+   视图：日志
    ========================================================================== */
 
 .log-view {
@@ -2052,8 +2052,8 @@ pre,
   overflow: auto;
 }
 .log-view:empty::before {
-  content: "鏆傛棤鏃ュ織";
-  color: var(--text-secondary);
+  content: "暂无日志";
+  color: var(--text-tertiary);
 }
 .log-view .lvl-error {
   color: var(--danger-fg);
@@ -2064,7 +2064,7 @@ pre,
 }
 
 /* ==========================================================================
-   缁勪欢锛歍oast
+   组件：Toast
    ========================================================================== */
 
 .toast-host {
@@ -2141,7 +2141,7 @@ pre,
 }
 
 /* ==========================================================================
-   鍝嶅簲寮?
+   响应式
    ========================================================================== */
 
 @media (max-width: 1080px) {
@@ -2154,10 +2154,10 @@ pre,
   }
 }
 
-/* 涓棿鏂偣锛氬钩鏉挎í灞?/ 灏忔闈紙720鈥?00px锛夈€?
-   澶у睆涓嬩晶鏍忓崰 232px銆佸崱鐗?4 鍒楋紱涓睆鎶婁晶鏍忔敹绱у埌鍥炬爣鍒楋紝
-   鏂规 / 妯℃澘缃戞牸浠?4 鍒楅檷鍒?2鈥? 鍒楋紝閬垮厤鍗＄墖琚尋鐦﹀埌涓嶅彲璇汇€?
-   < 720 宸叉湁 max-width: 900px 閭ｆ潯鍒囧埌搴曟爮锛涜繖閲屽彧澶勭悊"渚ф爮浠嶅湪锛屼絾鏀句笉涓嬩袱鍒楀崱鐗?鐨勪腑闂存。銆?*/
+/* 中间断点：平板横屏 / 小桌面（720–900px）。
+   大屏下侧栏占 232px、卡片 4 列；中屏把侧栏收紧到图标列，
+   方案 / 模板网格从 4 列降到 2–3 列，避免卡片被挤瘦到不可读。
+   < 720 已有 max-width: 900px 那条切到底栏；这里只处理"侧栏仍在，但放不下两列卡片"的中间档。 */
 @media (min-width: 720px) and (max-width: 900px) {
   :root {
     --nav-w: 64px;
