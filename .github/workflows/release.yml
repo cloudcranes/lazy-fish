@@ -1,10 +1,14 @@
 name: Release
 
 on:
+  # release-please 用 API 建 tag/release，push:tags 不触发；
+  # release:published 覆盖该路径（自动化主路径）。push:tags 保留兼容手动打 tag。
   push:
     tags:
       - "xyzw-auto-clicker-v*.*.*"
       - "v*.*.*"
+  release:
+    types: [published]
   workflow_dispatch:
     inputs:
       version:
@@ -51,12 +55,25 @@ jobs:
       - name: Extract version
         id: version
         run: |
-          if [ "${GITHUB_EVENT_NAME}" = "workflow_dispatch" ]; then
-            # Manual dispatch: use the version supplied via workflow_dispatch input,
-            # stripping the optional leading 'v'. If a tag for that version already
-            # exists on the remote, we still tag the image with it — the operator is
-            # explicitly asking for that version.
-            RAW="${INPUTS_VERSION:-${GITHUB_SHA:0:7}}"
+          # dispatch 时可能以 tag 为 ref（gh workflow run --ref <tag>）：
+          # 此时 GITHUB_REF_NAME 是版本 tag，优先取它；否则用 input 或 SHA。
+          REF_TAG="${GITHUB_REF_NAME}"
+          if [[ "${REF_TAG}" == xyzw-auto-clicker-v* ]]; then
+            REF_TAG="${REF_TAG#xyzw-auto-clicker-v}"
+          fi
+          if [[ "${REF_TAG}" == v[0-9]* ]]; then
+            REF_TAG="${REF_TAG#v}"
+          fi
+          if [ "${GITHUB_EVENT_NAME}" = "release" ]; then
+            # release:published —— tag 名即版本；release-please 自动发版主路径
+            VERSION="${GITHUB_REF_NAME#xyzw-auto-clicker-v}"
+            VERSION="${VERSION#v}"
+          elif [ "${GITHUB_EVENT_NAME}" = "workflow_dispatch" ]; then
+            # Manual dispatch: prefer the ref tag, then the version input.
+            RAW="${REF_TAG}"
+            if ! [[ "${RAW}" =~ ^[0-9]+\.[0-9]+\.[0-9]+$ ]]; then
+              RAW="${INPUTS_VERSION:-${GITHUB_SHA:0:7}}"
+            fi
             VERSION="${RAW#v}"
           else
             # Tag push: ${GITHUB_REF_NAME} is the v*.*.* or xyzw-auto-clicker-v*.*.*
