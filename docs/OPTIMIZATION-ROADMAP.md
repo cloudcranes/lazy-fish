@@ -608,6 +608,63 @@ GET /api/health:
 
 **新增里程碑**：阶段 3 wave7 把 wave6 留下的两个非阻断收口合并升为正式质量门：① release 流程在 release-please 升 1.0 之前支持完整 `v0.1.0..v2.0.0` 手动 dispatch，避免 1.0 后手动 publish 时被 GitHub UI 下拉列表缺档位阻塞；② visual job 与 a11y job 在 PR-17/PR-20 两次升级后正式并列为「PR + main 同等 fail-fast 合并门槛」双轨，把 wave6「先宽松收集基线、再收紧」的过渡期收尾。剩余触发条件（multi-scale batch、OpenTelemetry、`safety` 第三方依赖扫描、多 Runner 实例并发等）继续按 §3 条件按需启动。
 
+### 8.9 阶段 3 wave8 — OTel traces 落地 + release-please 升 1.0 前评估（已落地，2026-09-26）
+
+> wave8 把 §3 中长期悬而未决的「OpenTelemetry auto-instrumentation」提前落地为正式可观测基础设施（手写中间件 / span 覆盖 http / runner.iter / adb.screenshot / adb.tap / matcher.match，OTLP 留口），同时把「release-please 升 1.0 评估」从「触发就干」收口为「6 项 checklist + 5 步操作手册」的可执行 SOP（§6 整段新增）。commit 已在 origin/main（`2002303..c99f1f9 main -> main`）。
+
+**commit 链**（3 commits，按时间倒序；wave7 与 wave8 之间夹 PR-19/PR-20 的补 commit `2002303`，归属 §8.8 wave7 末尾 evidence）：
+
+| SHA | 说明 |
+|---|---|
+| `c99f1f9` | feat(observability): OTel traces (PR-21) |
+| `a7d392d` | docs(release): PR-22 release-please 升 1.0 评估 |
+| `2002303` | docs(roadmap): stage3 wave7 - record PR-19 inputs.expand + PR-20 visual fail-fast landing evidence |
+
+**PR-21：OTel traces（中间件 + 关键 span）**（commit `c99f1f9`，6 文件 +449/-17）
+
+| 变更 | 文件 |
+|---|---|
+| `opentelemetry-api==1.34.1` + `opentelemetry-sdk==1.34.1` + `opentelemetry-instrumentation-fastapi==0.55b1`（稳定版，无 OTLP exporter，依赖由 collector 兜底） | `requirements.txt` |
+| 新增 `tracing_setup.py`：`configure_tracer` / `load_tracer` / `shutdown_tracer` 三件套；进程级 `TracerProvider` 单例；`OTEL_SDK_DISABLED=true` → NoOp（即使全局已设 SDK provider 也强制 NoOp，避免「SDK provider 已注册后临时切 disabled」仍拿到 SDK tracer）；`service.name='lazy-fish'` / `service.version=os.environ.get('LAZY_FISH_VERSION','dev')`；`_stdout_alive()` 守卫：stdout 关闭时不挂 `ConsoleSpanExporter`，避免 pytest capture / 子进程退出后 BatchSpanProcessor 后台 flush 写满屏 `ValueError` | `xyzw_auto_clicker/tracing_setup.py`（新） |
+| `lifespan` startup → `load_tracer("lazy-fish")`，shutdown → `shutdown_tracer()`（`force_flush`，避免 uvicorn 优雅退出丢缓冲）；`@app.middleware("http")` 发射 `http {method} {path}` span，attributes `http.method` / `http.route` / `http.status_code`（FastAPI 中间件而非 `FastAPIInstrumentor`，省掉 contrib 包里 asgi/instrumentation 子依赖） | `xyzw_auto_clicker/app.py` |
+| `_run()` 每轮包 `runner.iter` span；`adb.screenshot` 子 span 带 `adb.dropped_frames` 属性；`adb.tap` 子 span 带 `adb.tap_count` 属性；`matcher.match` 通过 OTel context 自动成为 `runner.iter` 子节点 | `xyzw_auto_clicker/runner.py` |
+| `match()` 包 `matcher.match` span：attributes `template_count` 总是记录 + `hit_template_name` 仅命中时记录（未命中时属性缺席，与「真没匹配」区分） | `xyzw_auto_clicker/matcher.py` |
+| 5 例单测：`OTEL_SDK_DISABLED=true → NoOp` / `OTEL_SDK_DISABLED=false → SDK provider + resource` / `手动 span attributes 验证` / `matcher.match span template_count + hit_template_name` / `FastAPI 中间件 http span 三属性` | `tests/test_pr21_tracing.py`（新） |
+
+**PR-22：release-please 升 1.0 前评估**（commit `a7d392d`，3 文件 +45/-3）
+
+| 变更 | 文件 |
+|---|---|
+| 新增 §6「升 1.0 前 checklist」：6 项收口表（API 稳定 / 字段冻结 / 模板系统固化 / 计划 schema stable / 部署文档完备 / breaking change 梳理）+ 5 步升 1.0 操作步骤（关 minor-pre-major 闸 → CHANGELOG.md 升段 → 发版闸自检 → README 三处对齐 → 首次反映后守门）+ 关联引用 | `docs/RELEASING.md` |
+| 显式标注 `prerelease: false`：1.0 当天不打 rc；`bump-minor-pre-major` / `bump-patch-for-minor-pre-major` 仍为 true（< 1.0 生效提示见 §6） | `release-please-config.json` |
+| §3 表新增「release-please 升 1.0 评估」行 + 「✅ 已完成」勾选 + 链接到 `docs/RELEASING.md` §6「升 1.0 前 checklist」 | `docs/OPTIMIZATION-ROADMAP.md` |
+
+**总验收验证**（gate-reviewer 复核，2026-09-26）：
+
+- `git log --oneline -10` 显示 `a7d392d` 与 `c99f1f9` 均已在 origin/main（HEAD = `c99f1f9`），与依赖结果 SHA 完全一致
+- `git show c99f1f9 --stat` → 6 files changed, 449 insertions(+), 17 deletions(-)（PR-21 范围：requirements.txt + 4 业务模块 + 1 测试文件）
+- `git show a7d392d --stat` → 3 files changed, 45 insertions(+), 3 deletions(-)（PR-22 范围：RELEASING.md + release-please-config.json + OPTIMIZATION-ROADMAP.md）
+- `python -m pytest tests/ -q` → **117 passed in 8.08s**（PR-21 baseline 112 + PR-21 新增 5，零回归；exit code 0）
+- `python -m compileall -q tests/ xyzw_auto_clicker/ scripts/` → exit 0（PR-21 新增 `tracing_setup.py` + 5 个改动文件全部 py_compile 通过）
+- `OTEL_SDK_DISABLED=true` 路径验证：`configure_tracer("lazy-fish", service_version="test")` → `_provider` 保持 `None`，返回 `NoOpTracer`，`span.is_recording() is False`（即使全局已被其他测试设成 SDK provider 也强制 NoOp，与 contract 一致）
+- `OTEL_SDK_DISABLED=false` 路径验证：`_provider` 创建并 set 到全局；`resource.attributes["service.name"] == "lazy-fish"`；`service.version` 读 `LAZY_FISH_VERSION` env；幂等（重复 configure_tracer 不重建 provider）
+- 三业务模块 wiring 验证（`grep "_tracer = load_tracer" xyzw_auto_clicker/{app,runner,matcher}.py`）：3/3 命中；`grep "_tracer.start_as_current_span"`：3/3 命中
+- `release-please-config.json` JSON 解析 OK：字段集 = `{releaseType=python, packageName=lazy-fish, bump-minor-pre-major=true, bump-patch-for-minor-pre-major=true, prerelease=false}`（PR-22 新增 `prerelease: false` 显式标注）
+- `docs/RELEASING.md §6` 完整性：6 项 checklist（API 稳定 / 字段冻结 / 模板系统固化 / 计划 schema stable / 部署文档完备 / breaking change 梳理）每项含「谁负责 + 复核路径」；5 步升 1.0 操作步骤含 jsonc 示例 + ⚠️ 警告 + 关联引用；§8.4 / §8.5 / §8.6 / §8.7 引用全部存在（release-please → dispatch → visual fail-fast 链路）
+- `docs/OPTIMIZATION-ROADMAP.md §3` 表：第 142 行 `release-please 升 1.0 评估 | — | 0.5d | ✅ 已完成（PR-22 落地；详见 docs/RELEASING.md §6「升 1.0 前 checklist」）` 落地，与 PR-22 commit diff 字节级一致
+- `docs/OPTIMIZATION-ROADMAP.md §8.7` 末尾 + §8.8 wave7 evidence 完整，wave8 §8.9 由 gate-reviewer 在本轮补齐（见本节）
+
+**未闭合项 / 已知偏差**：
+
+- `FastAPIInstrumentor.instrument_app(app)` 未调用：依赖已列入 `requirements.txt`，但 contrib 自动插桩未启用（手写中间件已覆盖 §6 契约里的「http span method/route/status_code」三属性）。ponytail：依赖已加载，未来如需 traceparent header 透传 + 跨进程 trace_id，flip 一行即可，无需 requirements 变更（**非阻断**，scope 之内 YAGNI）
+- OTLP / collector-side wiring 未接：`BatchSpanProcessor(ConsoleSpanExporter())` 仍是兜底；collector 端 `OTEL_EXPORTER_OTLP_ENDPOINT` env 待 collector side provisioning 后替换为 `OTLPSpanExporter`（**非阻断**，scope 之外）
+- pytest stderr 在跑完 `test_pr21_tracing.py` 后偶现 OTel `ValueError: I/O operation on closed file`：根因是 `BatchSpanProcessor` 后台线程在 pytest 关闭 capture 后 flush 已闭 stdout，`_stdout_alive()` 守卫只挡「configure_tracer 启动期」的 attach 决策，挡不住测试中途手工重置全局 provider 后旧 BSP 仍带 stdout 引用。pytest exit code 仍为 0，117 例全绿，CI 不受影响。ponytail：在 `test_pr21_tracing.py` 的 `finally` 块里对旧 provider 调 `provider.shutdown()` 即可消声（**已知偏差 / 非阻断**，修复放在下一 wave 的 tracing 测试集稳定性收口）
+- `release-please-config.json` 的 `prerelease: false`（PR-22 新增）是声明性标注，release-please 当前版本本身不支持 1.0 prerelease 标签语义，故此 flag 对行为零影响，仅作「未来若 release-please 升级支持 prerelease 时显式声明 1.0 不打 rc」的语义锚点（**非阻断**，纯文档价值）
+- 升 1.0 操作步骤第 1 步提示「升 1.0 当天不要同时改 flag + 提第一个 feat!:」：双 commit 拆分是流程约束，需要人去执行而非工具自动保证（**非阻断**，流程纪律）
+- `pyright-baseline.json` 维持 `diagnostics=[]`；wave8 PR-21 新增 `tracing_setup.py` 与 `app.py` / `runner.py` / `matcher.py` 改动均使用 `if TYPE_CHECKING` + 显式 `# type: ignore` 不需要的位置，`_provider: TracerProvider | None` 等类型注解已被 pyright 接受，wave3 invariant 完整
+
+**新增里程碑**：阶段 3 wave8 把 §3 长期项中两个「observability / release governance」短板同时收口：① OTel traces 从「写依赖 + 写中间件 + 写 span」三件套落地为正式可观测基础设施（中间件覆盖 HTTP、span 覆盖 runner.iter / adb.screenshot / adb.tap / matcher.match，OTLP 留口等 collector side provisioning 后即插即用，pytest 全绿），§3 中长期悬而未决的「OpenTelemetry auto-instrumentation」正式关闭；② release-please 升 1.0 从「触发就干」升级为「6 项 checklist + 5 步操作手册」的可执行 SOP，把 wave7 wave5 wave3 多轮 release-please 落地经验沉淀到 `docs/RELEASING.md §6`，下次手动升 1.0 之前能逐条复核，避免「赌下游兼容性」。剩余触发条件（multi-scale batch、`safety` 第三方依赖扫描、多 Runner 实例并发、OTel collector side provisioning + OTLP exporter 替换 BSP 等）继续按 §3 条件按需启动。
+
 ---
 
 > 关联文档：[docs/RECOGNITION-RESEARCH.md](./RECOGNITION-RESEARCH.md)（识别根因 + 实验数据）。
