@@ -142,7 +142,13 @@ def frame_fingerprint(png_bytes: bytes) -> np.ndarray | None:
     if image is None:
         _fingerprint_cache = (png_bytes, None)
         return None
-    fp = cv2.resize(image, None, fx=FINGERPRINT_SCALE, fy=FINGERPRINT_SCALE, interpolation=cv2.INTER_AREA)
+    fp = cv2.resize(
+        image,
+        None,
+        fx=FINGERPRINT_SCALE,
+        fy=FINGERPRINT_SCALE,
+        interpolation=cv2.INTER_AREA,
+    )
     _fingerprint_cache = (png_bytes, fp)
     return fp
 
@@ -160,7 +166,9 @@ class ImageMatcher:
     # 同一帧里 _roi_band_rect 会被调用多次（每个模板一次），但画面尺寸与 profile.roi_band
     # 在一轮里都是常量——把结果缓存住，避免每帧每模板都重算 int(...)。
     # ponytail: 改 OrderedDict+maxsize 实现 LRU；超过 ROI_CACHE_MAXSIZE 按插入序淘汰。
-    _roi_rect_cache: OrderedDict[tuple[int, int, tuple[float, float] | None], tuple[int, int, int, int]] = OrderedDict()
+    _roi_rect_cache: OrderedDict[
+        tuple[int, int, tuple[float, float] | None], tuple[int, int, int, int]
+    ] = OrderedDict()
 
     def __init__(self, template_dir: Path) -> None:
         self.template_dir = template_dir
@@ -217,7 +225,15 @@ class ImageMatcher:
         """
         cls._roi_rect_cache.clear()
 
-    def crop_template(self, screenshot_png: bytes, x: int, y: int, width: int, height: int, output_path: Path) -> None:
+    def crop_template(
+        self,
+        screenshot_png: bytes,
+        x: int,
+        y: int,
+        width: int,
+        height: int,
+        output_path: Path,
+    ) -> None:
         image = self._decode(screenshot_png)
         image_height, image_width = image.shape[:2]
         left = max(0, min(x, image_width - 1))
@@ -249,7 +265,9 @@ class ImageMatcher:
         )
         if memory_alive:
             if entry.memory_box is not None:
-                window = self._window_rect(screenshot, template, *entry.memory_box, entry.memory_scale)
+                window = self._window_rect(
+                    screenshot, template, *entry.memory_box, entry.memory_scale
+                )
                 hit = self._scan(screenshot, entry, [entry.memory_scale], window, precise=True)
                 if hit is not None and hit.score >= threshold:
                     entry.memory_box = (hit.x, hit.y)
@@ -359,16 +377,27 @@ class ImageMatcher:
             # 小图降采样后连模板特征都剩不下，这类情况直接全分辨率扫
             coarse_template = min(template.shape[0], template.shape[1]) * min(scales) * factor
             coarse_region = min(region.shape[0], region.shape[1]) * factor
-            if coarse_template < MIN_COARSE_TEMPLATE_PIXELS or coarse_region < MIN_COARSE_REGION_PIXELS:
+            if (
+                coarse_template < MIN_COARSE_TEMPLATE_PIXELS
+                or coarse_region < MIN_COARSE_REGION_PIXELS
+            ):
                 factor = 1.0
-        source = region if factor == 1.0 else cv2.resize(region, None, fx=factor, fy=factor, interpolation=cv2.INTER_AREA)
+        source = (
+            region
+            if factor == 1.0
+            else cv2.resize(region, None, fx=factor, fy=factor, interpolation=cv2.INTER_AREA)
+        )
         if source.shape[0] < 8 or source.shape[1] < 8:
             return None
 
         best: _Hit | None = None
         for scale in scales:
             scaled = self._scaled_template(entry, scale, factor)
-            if scaled is None or scaled.shape[0] > source.shape[0] or scaled.shape[1] > source.shape[1]:
+            if (
+                scaled is None
+                or scaled.shape[0] > source.shape[0]
+                or scaled.shape[1] > source.shape[1]
+            ):
                 continue
             scores = cv2.matchTemplate(source, scaled, cv2.TM_CCOEFF_NORMED)
             _, max_value, _, max_location = cv2.minMaxLoc(scores)
@@ -395,7 +424,9 @@ class ImageMatcher:
         interpolation = cv2.INTER_AREA if scale < 1.0 else cv2.INTER_LINEAR
         return cv2.resize(template, (width, height), interpolation=interpolation)
 
-    def _scaled_template(self, entry: _TemplateEntry, scale: float, factor: float) -> np.ndarray | None:
+    def _scaled_template(
+        self, entry: _TemplateEntry, scale: float, factor: float
+    ) -> np.ndarray | None:
         """按 (模板版本, scale, factor) 缓存 resize 结果，避免每帧重算。
         ponytail: 256 条够 ~4 模板 × 16 档 × 4 factor；模板替换 mtime 即变，自动失效。
         """
@@ -415,7 +446,9 @@ class ImageMatcher:
         return resized
 
     @classmethod
-    def _roi_band_rect(cls, screenshot: np.ndarray, profile: MatchProfile) -> tuple[int, int, int, int]:
+    def _roi_band_rect(
+        cls, screenshot: np.ndarray, profile: MatchProfile
+    ) -> tuple[int, int, int, int]:
         """把 ROI 矩形的计算结果按 (画面尺寸, roi_band) 缓存住。
 
         ponytail: OrderedDict + ROI_CACHE_MAXSIZE 跑 LRU；同一 (h, w, band) 只算一次，

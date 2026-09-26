@@ -1,3 +1,25 @@
 [tool.pytest.ini_options]
 pythonpath = ["."]
 testpaths = ["tests"]
+
+[tool.ruff]
+line-length = 100
+target-version = "py310"
+extend-exclude = [".venv", "build", "dist"]
+
+[tool.ruff.lint]
+select = ["E", "F", "W", "I", "B", "UP"]
+
+[tool.ruff.lint.per-file-ignores]
+# 测试文件常用 fixture、未使用 import 与模块级延迟 import；
+# 长字符串拼接 + 单测构造用例时常常超出 100 列；这些是有意为之，不应当作 lint 错误。
+"tests/**" = ["F401", "F841", "E402", "E501", "F541", "I001", "UP038", "B905", "W292"]
+
+[tool.pyright]
+pythonVersion = "3.10"
+# 严格模式按包目录逐项打开；pyright 自 1.1 起未原生支持 baseline.json，
+# 见 scripts/pyright_check.py：读 pyright-baseline.json 过滤掉已知诊断，
+# 这样新增/迁移的代码若引入新问题会立刻在 CI 上 fail。
+strict = ["xyzw_auto_clicker"]
+# numpy/cv2 在 Windows wheel 名与 CI Linux 环境不一致，关掉假阳性导入缺失。
+reportMissingImports = "none"

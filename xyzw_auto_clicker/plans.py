@@ -8,7 +8,7 @@ import tempfile
 from dataclasses import dataclass
 from pathlib import Path
 
-from pydantic import BaseModel, ConfigDict, Field, ValidationError, field_validator, model_validator
+from pydantic import BaseModel, ConfigDict, Field, ValidationError, field_validator
 
 from .matcher import DEFAULT_ROI_BAND, DEFAULT_SCALE_MAX, DEFAULT_SCALE_MIN, DEFAULT_SCALE_STEP
 from .settings import DATA_DIR, TRASH_DIR, fix_mojibake_name
@@ -188,7 +188,10 @@ def ensure_default_plan() -> SavedPlan | None:
         return next(plan for plan in existing if plan.default)
     first_template = "video-first-open10.png"
     repeat_template = "video-repeat10.png"
-    if not (DATA_DIR / "templates" / first_template).exists() or not (DATA_DIR / "templates" / repeat_template).exists():
+    if (
+        not (DATA_DIR / "templates" / first_template).exists()
+        or not (DATA_DIR / "templates" / repeat_template).exists()
+    ):
         return None
     return save_plan(
         PlanSaveRequest(

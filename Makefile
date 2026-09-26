@@ -8,7 +8,7 @@ PORT      ?= 8765
 COMPOSE   ?= docker compose
 TAG       ?= dev
 
-.PHONY: help install dev run test test-core eval lint format clean build compose-up compose-down compose-build release
+.PHONY: help install dev run test test-core eval lint smoke-import format clean build compose-up compose-down compose-build release
 
 help:  ## list targets
 	@grep -E '^[a-zA-Z_-]+:.*?## .*$$' $(MAKEFILE_LIST) | awk 'BEGIN{FS=":.*?## "}{printf "  %-14s %s\n", $$1, $$2}'
@@ -17,7 +17,7 @@ install:  ## create venv and install runtime deps
 	$(PY) -m venv .venv
 	.venv/bin/$(PIP) install -r requirements.txt
 
-dev:  ## install runtime + dev (pytest) deps into the active environment
+dev:  ## install runtime + dev (pytest, ruff, pyright, pip-audit) deps
 	$(PIP) install -r requirements-dev.txt
 
 run:  ## run WebUI locally on LAZY_FISH_PORT (default 8765)
@@ -29,7 +29,11 @@ test:  ## run unit tests
 eval:  ## recognition regression on real footage
 	$(PY) tests/recognition_eval.py
 
-lint:  ## import every module without side-effects (cheap smoke test)
+lint:  ## ruff check . + pyright strict (xyzw_auto_clicker) against pyright-baseline.json
+	ruff check .
+	@$(PY) scripts/pyright_check.py
+
+smoke-import:  ## import every module without side-effects (cheap smoke test)
 	$(PY) -c "from xyzw_auto_clicker import matcher, runner, app, adb, models; print('imports OK')"
 
 format:  ## run black on the package if installed; no-op otherwise

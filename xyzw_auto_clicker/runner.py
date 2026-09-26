@@ -106,7 +106,11 @@ class TaskRunner:
                 # 落盘后只把路径留给 API/前端，避免状态对象长期持有大字节数组
                 state.last_screenshot = self._write_latest_screenshot(screenshot)
                 click_index = state.clicked
-                template_names = config.first_template_names if (click_index == 0 and config.first_template_names) else config.template_names
+                template_names = (
+                    config.first_template_names
+                    if (click_index == 0 and config.first_template_names)
+                    else config.template_names
+                )
                 match = self.matcher.match(screenshot, template_names, threshold, profile)
                 if match is None:
                     state.misses += 1
@@ -120,7 +124,11 @@ class TaskRunner:
                     await asyncio.sleep(interval)
                     continue
                 x, y = match.x + match.width // 2, match.y + match.height // 2
-                tap_count = 1 if (click_index == 0 and config.first_template_names) else config.repeat_tap_count
+                tap_count = (
+                    1
+                    if (click_index == 0 and config.first_template_names)
+                    else config.repeat_tap_count
+                )
                 for tap_index in range(tap_count):
                     await adb.tap(x, y, device_id)
                     if tap_index + 1 < tap_count:

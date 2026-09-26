@@ -18,7 +18,17 @@ from pydantic import BaseModel, Field, field_validator, model_validator
 from .adb import AdbClient
 from .logging_setup import configure as _configure_logging
 from .matcher import ImageMatcher
-from .plans import PlanPayload, PlanSaveRequest, _CROP_MAX_AREA, _safe_field_name, delete_plan, ensure_default_plan, list_plans, load_plan, save_plan
+from .plans import (
+    _CROP_MAX_AREA,
+    PlanPayload,
+    PlanSaveRequest,
+    _safe_field_name,
+    delete_plan,
+    ensure_default_plan,
+    list_plans,
+    load_plan,
+    save_plan,
+)
 from .runner import TaskRunner
 from .settings import BASE_DIR, SHOT_DIR, STOP_FILE, TEMPLATE_DIR, repair_template_names
 from .tasks.chest import build_chest_config
@@ -91,7 +101,9 @@ class StartRequest(PlanPayload):
 
 @app.get("/", response_class=HTMLResponse)
 async def index(request: Request) -> HTMLResponse:
-    response = templates.TemplateResponse(request, "index.html", {"asset_version": _asset_version()})
+    response = templates.TemplateResponse(
+        request, "index.html", {"asset_version": _asset_version()}
+    )
     # 前端资源改动后必须立刻生效，禁止浏览器缓存页面外壳
     response.headers["Cache-Control"] = "no-store, must-revalidate"
     return response
@@ -109,7 +121,11 @@ async def list_devices() -> dict[str, object]:
 @app.post("/api/screenshot")
 async def take_screenshot(payload: dict[str, str | None] | None = None) -> dict[str, str]:
     device_id = payload.get("device_id") if payload else None
-    if device_id is not None and device_id != "" and not re.fullmatch(r"[A-Za-z0-9._:-]+", device_id):
+    if (
+        device_id is not None
+        and device_id != ""
+        and not re.fullmatch(r"[A-Za-z0-9._:-]+", device_id)
+    ):
         raise HTTPException(status_code=400, detail="device_id 仅允许字母数字与 . _ : -")
     data = await adb.screenshot_png(device_id)
     # 与 runner 保持一致：截图落盘一份给 /api/screenshots/latest.png 用，不在状态里塞大字节数组

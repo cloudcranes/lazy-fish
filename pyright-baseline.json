@@ -1,0 +1,152 @@
+{
+  "pythonVersion": "3.10",
+  "strict": [
+    "xyzw_auto_clicker"
+  ],
+  "diagnostics": [
+    {
+      "file": "xyzw_auto_clicker/app.py",
+      "line": 22,
+      "rule": "reportPrivateUsage",
+      "message": "\"_CROP_MAX_AREA\" is private and used outside of the module in which it is declared"
+    },
+    {
+      "file": "xyzw_auto_clicker/app.py",
+      "line": 25,
+      "rule": "reportPrivateUsage",
+      "message": "\"_safe_field_name\" is private and used outside of the module in which it is declared"
+    },
+    {
+      "file": "xyzw_auto_clicker/app.py",
+      "line": 87,
+      "rule": "reportReturnType",
+      "message": "Type \"str\" is not assignable to return type \"int\"\n  \"str\" is not assignable to \"int\""
+    },
+    {
+      "file": "xyzw_auto_clicker/app.py",
+      "line": 302,
+      "rule": "reportPrivateUsage",
+      "message": "\"_env_json\" is private and used outside of the module in which it is declared"
+    },
+    {
+      "file": "xyzw_auto_clicker/logging_setup.py",
+      "line": 43,
+      "rule": "reportMissingTypeArgument",
+      "message": "Expected type arguments for generic class \"StreamHandler\""
+    },
+    {
+      "file": "xyzw_auto_clicker/logging_setup.py",
+      "line": 47,
+      "rule": "reportUnknownMemberType",
+      "message": "Type of \"__init__\" is partially unknown\n  Type of \"__init__\" is \"Overload[(stream: None = None) -> None, (stream: Unknown) -> None]\""
+    },
+    {
+      "file": "xyzw_auto_clicker/logging_setup.py",
+      "line": 69,
+      "rule": "reportUnknownMemberType",
+      "message": "Type of \"formatException\" is unknown"
+    },
+    {
+      "file": "xyzw_auto_clicker/logging_setup.py",
+      "line": 69,
+      "rule": "reportAttributeAccessIssue",
+      "message": "Cannot access attribute \"formatException\" for class \"_JsonHandler*\"\n  Attribute \"formatException\" is unknown"
+    },
+    {
+      "file": "xyzw_auto_clicker/logging_setup.py",
+      "line": 70,
+      "rule": "reportUnknownMemberType",
+      "message": "Type of \"stream\" is unknown"
+    },
+    {
+      "file": "xyzw_auto_clicker/logging_setup.py",
+      "line": 70,
+      "rule": "reportUnknownMemberType",
+      "message": "Type of \"write\" is unknown"
+    },
+    {
+      "file": "xyzw_auto_clicker/logging_setup.py",
+      "line": 71,
+      "rule": "reportUnknownMemberType",
+      "message": "Type of \"stream\" is unknown"
+    },
+    {
+      "file": "xyzw_auto_clicker/logging_setup.py",
+      "line": 71,
+      "rule": "reportUnknownMemberType",
+      "message": "Type of \"flush\" is unknown"
+    },
+    {
+      "file": "xyzw_auto_clicker/matcher.py",
+      "line": 140,
+      "rule": "reportUnknownMemberType",
+      "message": "Type of \"frombuffer\" is partially unknown\n  Type of \"frombuffer\" is \"Overload[(buffer: Unknown, dtype: None = None, count: SupportsIndex = -1, offset: SupportsI"
+    },
+    {
+      "file": "xyzw_auto_clicker/matcher.py",
+      "line": 269,
+      "rule": "reportArgumentType",
+      "message": "Argument of type \"float | None\" cannot be assigned to parameter \"scale\" of type \"float\" in function \"_window_rect\"\n  Type \"float | None\" is not assignable to ty"
+    },
+    {
+      "file": "xyzw_auto_clicker/matcher.py",
+      "line": 271,
+      "rule": "reportArgumentType",
+      "message": "Argument of type \"list[float | None]\" cannot be assigned to parameter \"scales\" of type \"list[float]\" in function \"_scan\"\n  Type \"float | None\" is not assignable"
+    },
+    {
+      "file": "xyzw_auto_clicker/matcher.py",
+      "line": 277,
+      "rule": "reportArgumentType",
+      "message": "Argument of type \"list[float | None]\" cannot be assigned to parameter \"scales\" of type \"list[float]\" in function \"_scan\"\n  Type \"float | None\" is not assignable"
+    },
+    {
+      "file": "xyzw_auto_clicker/matcher.py",
+      "line": 516,
+      "rule": "reportUnknownMemberType",
+      "message": "Type of \"frombuffer\" is partially unknown\n  Type of \"frombuffer\" is \"Overload[(buffer: Unknown, dtype: None = None, count: SupportsIndex = -1, offset: SupportsI"
+    },
+    {
+      "file": "xyzw_auto_clicker/models.py",
+      "line": 56,
+      "rule": "reportArgumentType",
+      "message": "Argument of type \"tuple[float, ...] | None\" cannot be assigned to parameter \"roi_band\" of type \"tuple[float, float] | None\" in function \"__init__\"\n  Type \"tuple"
+    },
+    {
+      "file": "xyzw_auto_clicker/plans.py",
+      "line": 38,
+      "rule": "reportReturnType",
+      "message": "Type \"int\" is not assignable to return type \"str\"\n  \"int\" is not assignable to \"str\""
+    },
+    {
+      "file": "xyzw_auto_clicker/plans.py",
+      "line": 181,
+      "rule": "reportArgumentType",
+      "message": "Argument of type \"dict[str, str | dict[str, Any] | bool]\" cannot be assigned to parameter \"data\" of type \"dict[str, object]\" in function \"_write_json\"\n  \"dict[s"
+    },
+    {
+      "file": "xyzw_auto_clicker/plans.py",
+      "line": 182,
+      "rule": "reportArgumentType",
+      "message": "Argument of type \"str | dict[str, Any] | bool\" cannot be assigned to parameter \"payload\" of type \"dict[str, object]\" in function \"__init__\"\n  Type \"str | dict[s"
+    },
+    {
+      "file": "xyzw_auto_clicker/runner.py",
+      "line": 157,
+      "rule": "reportPossiblyUnboundVariable",
+      "message": "\"state\" is possibly unbound"
+    },
+    {
+      "file": "xyzw_auto_clicker/runner.py",
+      "line": 160,
+      "rule": "reportPossiblyUnboundVariable",
+      "message": "\"state\" is possibly unbound"
+    },
+    {
+      "file": "xyzw_auto_clicker/runner.py",
+      "line": 161,
+      "rule": "reportPossiblyUnboundVariable",
+      "message": "\"state\" is possibly unbound"
+    }
+  ]
+}

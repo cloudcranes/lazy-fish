@@ -59,7 +59,9 @@ class AdbClient:
             # 给出"重试 / 检查 USB 线"之类的提示，而不是把整条 stacktrace 甩给用户。
             raise AdbError("ADB 命令超时", code="TIMEOUT", stderr=str(exc)) from exc
         except FileNotFoundError as exc:
-            raise AdbError("未找到 adb，请把 adb 加入 PATH", code="NOT_FOUND", stderr=str(exc)) from exc
+            raise AdbError(
+                "未找到 adb，请把 adb 加入 PATH", code="NOT_FOUND", stderr=str(exc)
+            ) from exc
 
     def _device_args(self, device_id: str | None) -> list[str]:
         # device_id 同一任务固定，缓存命中省一次 list 构造 + 拼接
