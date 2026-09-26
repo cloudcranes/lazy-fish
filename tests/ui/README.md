@@ -1,6 +1,6 @@
 # WebUI 端到端冒烟测试
 
-通过 Chrome DevTools Protocol 驱动 Edge，验证界面渲染、交互与关键流程。**不需要安装任何 npm 依赖**（使用 Node 内置 `fetch` 与 `WebSocket`）。
+通过 Chrome DevTools Protocol 驱动 Edge，验证界面渲染、交互与关键流程。**冒烟脚本（`smoke.mjs` / `console-config.mjs` / `plan-selection.mjs` / `plan-actions.mjs` / `template-picker.mjs` / `capture-flow.mjs`）不需要安装任何 npm 依赖**（使用 Node 内置 `fetch` 与 `WebSocket`）。仅 `a11y.mjs` 需要 Playwright + axe-core，依赖由仓根 `npm ci` 拉到 `tests/ui/node_modules/`。
 
 ## 前置
 
@@ -14,6 +14,8 @@
   --user-data-dir="$env:TEMP\edge-cdp-profile" about:blank
 ```
 
+`a11y.mjs` 不需要上述 Edge；它自带 Playwright + Chromium，自动从 `npm install` 安装到 `tests/ui/node_modules/`。默认连 `http://127.0.0.1:8999/`（与 docker-compose / ci.yml 的 docker-up 一致），可用 `APP_URL` 覆盖。
+
 ## 运行
 
 ```bash
@@ -23,9 +25,10 @@ node tests/ui/plan-selection.mjs  # 44 项：方案卡载入是否真的生效�
 node tests/ui/plan-actions.mjs    # 31 项：设为默认、删除（内联二次确认 / Esc 取消 / 锁定）、删除使用中方案的状态清理（会临时建方案并自动还原）
 node tests/ui/template-picker.mjs # 31 项：采样页选择已有模板名、覆盖提示与按钮语义、手动输入的同步判定（非破坏性，不需要模拟器）
 node tests/ui/capture-flow.mjs    # 14 项：截图拉取、拖拽框选、裁剪保存（需连接模拟器）
+node tests/ui/a11y.mjs           # 自动 a11y：Playwright + axe-core 遍历 5 视图，serious/critical 视作 fail
 ```
 
-合计 **267 项**断言。
+合计 **267 项**断言 + 5 视图 a11y 自检。
 
 全部以退出码 0 表示通过，非 0 表示有失败项。
 

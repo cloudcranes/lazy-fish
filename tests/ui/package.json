@@ -1,0 +1,15 @@
+{
+  "name": "xyzw-ui-tests",
+  "version": "0.1.0",
+  "private": true,
+  "type": "module",
+  "description": "WebUI 端到端 + a11y 自检。仅声明 dev 依赖；运行测试需先在仓根 npm install（把 @axe-core/playwright / playwright 拉到本目录的 node_modules）。",
+  "scripts": {
+    "test:a11y": "node a11y.mjs"
+  },
+  "//": "本目录没有任何 dependencies 字段 —— 真实依赖由仓根 package.json 的 workspaces 统一下发；这样 relay/ 等生产 JS 不会被误装重型测试依赖。",
+  "devDependencies": {
+    "@axe-core/playwright": "^4.10.0",
+    "playwright": "^1.49.0"
+  }
+}

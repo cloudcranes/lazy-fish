@@ -299,3 +299,20 @@ xyzw_auto_clicker/app.py  提供 asset_version（static 目录 mtime）与 HTML 
 **交付状态**：已实现并完成浏览器实测（83 项冒烟 + 61 项控制台运行配置 + 44 项方案与次数 + 31 项方案增删改 + 31 项模板名选择 + 14 项框选链路，共 264 项断言全部通过）
 **验证覆盖**：视图路由、控制台方案芯片载入与次数镜像（双向）、方案卡载入与未保存改动检测、方案设为默认/删除（内联二次确认 + Esc 取消 + 运行时锁定）及其状态清理、模板角色指派与缺失校验、采样页模板名选择与覆盖提示、执行次数档位/步进/耗时估算/实时校验、运行时锁定、深色/浅色切换、侧栏折叠、移动端标签栏、截图框选与裁剪保存、后端状态字段联动（实时画面/连续失败/暂停原因）、资产缓存失效
 **测试入口**：`tests/ui/`（纯 CDP，无 npm 依赖，见 `tests/ui/README.md`）
+
+---
+
+## 十一、自动 a11y（axe-core + CI）
+
+§6 的 a11y 验收过去只靠「作者目测 + 14 项键盘/ARIA 冒烟断言」，本质是「我检查过的部分」，不是「全部 DOM 跑过 WCAG 检查」。
+
+PR-10 把 axe-core 拉进 CI 作为质量护栏：
+
+- **依赖**：`@axe-core/playwright` + `playwright`，仅在仓根 `package.json` 的 `devDependencies` 与 `tests/ui/package.json` 中声明；`workspaces: [tests/ui, relay]` 让 `npm ci` 把依赖下发到 `tests/ui/node_modules/`。生产镜像里没有这些（`.dockerignore` 显式排除 `tests/**/node_modules/`）。
+- **驱动脚本**：`tests/ui/a11y.mjs` 用 Playwright 自带 Chromium 打开 `http://127.0.0.1:8999/`，按 `console / plans / templates / capture / logs` 顺序切换视图，对每个视图跑 `AxeBuilder({ page }).withTags(['wcag2a','wcag2aa','wcag21a','wcag21aa']).analyze()`。
+- **判失败标准**：axe 报告 `impact ∈ {serious, critical}` 即视为 CI 失败；`moderate / minor` 仅打印不阻塞。退出码：`0` 全过；`1` 有 serious/critical；`2` 环境起不来（端口未通、依赖未装）。
+- **CI 编排**：新增 `docker-up` job（启动懒鱼容器并把 8999 端口对外暴露，循环 `/api/health` 直至就绪）→ `a11y` job（`needs: docker-up`，先 `npm ci` + `npx playwright install --with-deps chromium`，再 `node tests/ui/a11y.mjs`）。main 上 fail-fast（合并门槛），PR 上 `continue-on-error: true`，让维护者先看到问题但不阻塞合并 —— axe-core 引入早期会刷出 moderate 噪声，给作者留「先合并、后修」的过渡期。
+- **为什么 PR 上先 warn 而不是 fail-fast**：与 lint / test job 保持同一种「快速反馈、不阻塞」的处理方式；axe-core 噪音（重复 landmark、装饰 SVG 误报）一旦清完，把 `continue-on-error` 删掉即可升级为合并门槛，不需要改测试代码。
+- **与 §6 的关系**：§6 是「设计原则」（WCAG AA、对比度、键盘、屏幕阅读器），本节是「验证手段」。设计原则改了 → axe 规则自动跟上；axe 规则出了 serious/critical → 反过来逼 §6 落地。
+
+> **不需要单独跑 axe**：CI 已经把 a11y 跑在 `docker-up` 起的真容器上。本地想调试时：`docker compose up -d lazy-fish` → `npm ci && npx playwright install chromium` → `node tests/ui/a11y.mjs`。

@@ -17,6 +17,12 @@ docs/
 relay/
 tests/
 
+# tests/ui/a11y.mjs 需要的 node_modules 不该被打进镜像：镜像里没有 npm，
+# 带着反而会让 docker build 报 "ADD with no checksum" 之外的多余上下文。
+# 仓根 npm ci 后再下发到 tests/ui/node_modules/。
+**/node_modules/
+tests/**/node_modules/
+
 .idea/
 .vscode/
 .DS_Store
