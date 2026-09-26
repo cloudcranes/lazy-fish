@@ -9,7 +9,11 @@
 //   - 默认 fail-on：serious / critical；moderate / minor 仅打印不阻塞。
 //     这与 docs/UI-DESIGN.md §6「WCAG AA」保持一致——contrast / keyboard
 //     / aria 之类的真问题都在 serious/critical 里。
-//   - 退出码：0=全部通过；1=发现 serious/critical；2=环境起不来（端口未通）。
+//   - 退出码契约（PR-17 重申，此文件自 PR-10 以来未变）：
+//       0 = 5 视图全部无 serious/critical（pass）
+//       1 = 任意视图出现 serious 或 critical（CI 失败 / 合并门槛）
+//       2 = 环境起不来（端口未通、依赖未装、chromium 启动失败等）
+//     CI 的 a11y job 自 PR-17 起摘除 continue-on-error，该退出码即 GH Actions 的失败值。
 import { chromium } from "playwright";
 import { AxeBuilder } from "@axe-core/playwright";
 

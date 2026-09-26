@@ -131,10 +131,12 @@ make release-dispatch VERSION=v0.2.0      # 指定版本
 | 现象 | 排查 |
 |---|---|
 | release-please 没开 PR | 检查 `.github/workflows/release-please.yml` 是否启用、push 是否触发 `main` 分支、commit 是否带 `feat:` / `fix:` 前缀 |
-| Release PR 卡在 merge | 确认 CI 全绿；可能有 `pull_request` 权限问题，必要时给 `GITHUB_TOKEN` 加 `contents: write, pull-requests: write` |
+| Release PR 卡在 merge | 确认 CI 全绿；`a11y` job 自 **PR-17** 起已是合并门槛（PR + main 均 fail-fast），出现 `serious` / `critical` 即阻止 squash merge；其它可能的 `pull_request` 权限问题再单独处理，必要时给 `GITHUB_TOKEN` 加 `contents: write, pull-requests: write` |
 | tag 推上去但 release.yml 没跑 | `.github/workflows/release.yml` 的 `on.push.tags` 是 `v*.*.*`，确认 tag 名格式 |
 | workflow_dispatch 跑出来的镜像 tag 是 `main` 或 `GITHUB_SHA` | 这是老行为；当前 PR-16 已用 `inputs.version` 解闸，确保用的是最新 `release.yml`（`on.workflow_dispatch.inputs.version` 必须存在） |
 | GHCR 镜像看不到 | 检查 repo `Settings → Packages → Visibility`，新 repo 默认是 private |
+
+> **a11y 合并门槛（PR-17 起生效）**：PR-17 摘除了 `a11y` job 的 `continue-on-error: ${{ github.event_name == 'pull_request' }}`，Release PR 也会被阻塞；调试 release-please PR 时若 a11y 失败，优先定位 axe 报告的 serious/critical（moderate/minor 不阻塞），不要回退 `continue-on-error`。退出码语义 0/1/2 与 `tests/ui/a11y.mjs` 顶部注释一致。
 
 ## 6. 关联文件
 
