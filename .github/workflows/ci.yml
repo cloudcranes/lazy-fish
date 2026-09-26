@@ -112,9 +112,10 @@ jobs:
 
       - name: Smoke-run container
         run: |
-          docker run --rm -d --name lazy-fish-ci -p 8999:8999 lazy-fish:ci
+          docker run -d --name lazy-fish-ci -p 8999:8999 lazy-fish:ci
           sleep 8
-          curl -fsS http://127.0.0.1:8999/api/health -o /dev/null
+          curl -fsS http://127.0.0.1:8999/api/health -o /dev/null \
+            || { docker logs lazy-fish-ci; exit 1; }
           docker stop lazy-fish-ci
 
   # 把镜像"长期"起成服务，给 a11y 任务直接连 http://127.0.0.1:8999/；
@@ -143,7 +144,8 @@ jobs:
 
       - name: Run container (long-lived for a11y)
         run: |
-          docker run --rm -d --name lazy-fish-a11y -p 8999:8999 lazy-fish:a11y
+          # 不用 --rm：容器异常退出时保留现场，docker logs 才能拿到崩溃原因
+          docker run -d --name lazy-fish-a11y -p 8999:8999 lazy-fish:a11y
           # 等 healthcheck 通过：直接拉一次 /api/health，最多重试 10 次
           for i in $(seq 1 10); do
             if curl -fsS http://127.0.0.1:8999/api/health -o /dev/null; then
