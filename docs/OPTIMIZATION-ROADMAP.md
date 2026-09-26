@@ -1,6 +1,6 @@
 # lazy-fish 优化路线图
 
-> **生成日期**: 2026-09-25；**阶段 3 落地补登**: 2026-09-26；**阶段 3 wave2 补登**: 2026-09-26
+> **生成日期**: 2026-09-25；**阶段 3 落地补登**: 2026-09-26；**阶段 3 wave2 补登**: 2026-09-26；**阶段 3 wave3 补登**: 2026-09-26
 > **性质**: 只读整合。基于 backend-audit.md（28 条）与 t2-frontend-audit.md（13 条）。
 > **评分维度**: 性价比（effort / impact）× 风险（泄露 / 数据丢失 / UX 坏掉）。
 > **三阶段**: 阶段 1（≤ 1 周，必做）/ 阶段 2（≤ 1 月，值做）/ 阶段 3（长期，备选）。
@@ -328,6 +328,66 @@ GET /api/health:
 - adb 池的 `idle_seconds=60` 是默认值；高密度点击场景（§3 表里 ">5/s" 触发条件）尚无真实负载复测，待 click/screenshot 频率触线时再调 max_size / idle_seconds
 
 **新增里程碑**：阶段 3 wave2 把「§3 触发条件表」里的 *adb 长连接进程池* + *axe-core 接入 CI* 两项提前激活为常驻基础设施。剩余触发条件（multi-scale batch、OpenTelemetry、视觉回归、release-please 等）继续按 §3 条件按需启动。
+
+### 8.4 阶段 3 wave3 — release-please 自动发版 + pyright baseline 消化（已落地，2026-09-26）
+
+> wave3 把 §3 表里「release changelog 由 `release-please` 接管」+「Pyright / mypy strict 接入（持续消化 baseline）」两项提前激活为常驻基础设施；commit 已在 origin/main（`c99b6a9..3e2c543 main -> main`）。
+
+**commit 链**（2 commits，按时间倒序）：
+
+| SHA | 说明 |
+|---|---|
+| `3e2c543` | PR-12: pyright baseline 消化（24 → 0 条诊断） |
+| `c99b6a9` | feat: PR-11 release-please 自动发版 |
+
+**PR-11：release-please 自动发版**（commit `c99b6a9`，6 文件 +56/-13）
+
+| 变更 | 文件 |
+|---|---|
+| `googleapis/release-please-action@v4`（push main + workflow_dispatch；引用 `release-please-config.json` + `.release-please-manifest.json`） | `.github/workflows/release-please.yml`（新） |
+| `releaseType=python` / `packageName=lazy-fish` / `bump-minor-pre-major=true` / `bump-patch-for-minor-pre-major=true` | `release-please-config.json`（新） |
+| 初始版本 `0.1.0` | `.release-please-manifest.json`（新） |
+| `Extract version` 步去 tag/manual 双分支，只取 `GITHUB_REF_NAME#v`（release-please 推 tag 后才走 release.yml） | `.github/workflows/release.yml` |
+| 发布流程从「`make release VERSION=x.y.z` 手动打 tag」改成「Conventional Commits → 自动 PR → merge → release-please 推 tag → release.yml 构建+发布」 | `README.md` / `README.zh-CN.md` |
+
+**PR-12：pyright baseline 消化**（commit `3e2c543`，9 文件 +113/-207）
+
+| 修复 | 文件 / 关键字 |
+|---|---|
+| `plans._safe_field_name` → `safe_field_name`（公开给 app.py 复用，消 `reportPrivateUsage × 3`），返回类型改 `int`（`CropRequest.field_validator` 需要 `int` 给 `ge/gt`） | `plans.py` |
+| `plans._CROP_MAX_DIM / _CROP_MAX_AREA` → `CROP_MAX_DIM / CROP_MAX_AREA`（同上） | `plans.py` |
+| `plans._write_json` 协变：参数 / `SavedPlan.payload` / `_normalize_loaded_payload` 全部改 `dict[str, Any]`，让 `model_dump()` 嵌套 dict 通过 | `plans.py` |
+| `logging_setup._JsonHandler` 不再继承 `StreamHandler`，改继承 `Handler` 自持 `IO[str]`，规避 typeshed `_StreamT` vs `sys.stdout` 不对齐（一次性吃掉 `formatException / stream / write / flush / StreamHandler` 8 条） | `logging_setup.py` |
+| `logging_setup._env_json` → `env_json_enabled`（公开给 app.py metrics 端点，避免真值表漂移） | `logging_setup.py` |
+| `matcher np.frombuffer` 改 `np.ndarray(buffer=memoryview(png_bytes))`，消 `reportUnknownMemberType`（`frombuffer` 在 typeshed 里标 `ndarray[Unknown]`） | `matcher.py` |
+| `matcher` 热路径 `memory_scale` 显式 `assert` + 局部变量收窄，让 `_window_rect / _scan` 收 `float` 而非 `float \| None` | `matcher.py` |
+| `models.match_profile()` 不再用 `tuple()`，显式拆 tuple 收窄 `tuple[float, float]` | `models.py` |
+| `runner._run` 入口 `state: RunnerState = self.state` 显式收窄，消 `possibly unbound` | `runner.py` |
+| `adb._Slot.proc` + 两处 `subprocess.Popen()` 都加 `Popen[bytes]`；`slot.proc.stdin` 强类型化为 `IO[bytes] \| None`；`_slots.pop` 私有访问改成公开 `evict()` API | `adb.py` |
+| `tests/test_pr8_contract.py` 同步重命名 `_safe_field_name` → `safe_field_name` / `_CROP_MAX_DIM` → `CROP_MAX_DIM` | `tests/test_pr8_contract.py` |
+| 重建：`{"pythonVersion": "3.10", "strict": ["xyzw_auto_clicker"], "diagnostics": []}` | `pyright-baseline.json` |
+
+**总验收验证**（gate-reviewer 复核，2026-09-26）：
+
+- `python -m pytest tests/` → **103 passed in 6.74s**（与 wave2 同基线，零回归）
+- `python -m ruff check .` → All checks passed!
+- `python -m py_compile xyzw_auto_clicker/*.py scripts/*.py tests/*.py` → exit 0
+- `python scripts/pyright_check.py`（PATH 注入 `C:\...\Python314\Scripts`） → `pyright: 0 total, 0 new beyond baseline` exit 0
+- `python scripts/pyright_baseline_gen.py`（同 PATH 注入） → `baseline written: 0 diagnostics` exit 0
+- `release-please-config.json` / `.release-please-manifest.json` / `pyright-baseline.json` JSON 解析 OK
+- `.github/workflows/release-please.yml` / `release.yml` YAML 解析 OK，配置字段对得上
+- trigger 链：`release-please.yml` (push main) → 开/更新 Release PR → merge → release-please 推 tag `v*.*.*` → `release.yml` (push tag) 走 `Extract version` 取 `${GITHUB_REF_NAME#v}` → build+push GHCR + GH Release；与 ci.yml / security.yml 完全正交
+- PR-11 in-scope 文件全部入 commit（`release-please.yml` / `release.yml` / `release-please-config.json` / `.release-please-manifest.json` / `README.md` / `README.zh-CN.md`）；PR-12 in-scope 文件全部入 commit（7 个 `xyzw_auto_clicker/*.py` + `pyright-baseline.json` + `tests/test_pr8_contract.py`）
+- `git log --oneline -20` 显示 `3e2c543` / `c99b6a9` 已在 main 上，与依赖结果 SHA 一致
+
+**未闭合项 / 已知偏差**：
+
+- `release.yml` 的 `Extract version` 步简化后只取 `${GITHUB_REF_NAME#v}`；在 `workflow_dispatch` 路径下 `GITHUB_REF_NAME` 是默认分支（如 `main`），`VERSION` 会变成 `main` → 本地构建 tag 是 `lazy-fish:main`，但 `push` 被 `event_name == 'push'` 闸住不会真推 GHCR，所以**不影响发版链**。若想给手动 dispatch 也一个干净 tag，建议加 `if [ "${GITHUB_REF_TYPE}" = "tag" ] || [ "${GITHUB_EVENT_NAME}" = "workflow_dispatch" ]; then VERSION="${GITHUB_SHA::7}"; fi`（非阻断，下一 wave 处理）。
+- `Makefile` 的 `release` 目标仍保留手动 `git tag v$(VERSION) && git push origin v$(VERSION)`，与 release-please 自动发版重复且容易误用绕过 changelog PR；README 已替换文档但 Makefile 没改。建议下一 wave 删掉该 target 或在 `help` 文案里点名「不要用 `make release`，用 release-please PR」（非阻断）。
+- `pyright` console-script 路径同 §8.2 已登记的 Windows fallback 限制（`shutil.which("pyright")` 在本地开发机若未在 PATH 会 fallback 到字面量触发 `FileNotFoundError`），CI 上 `pip install -r requirements-dev.txt` 后无此问题；建议把脚本里的 `shutil.which("pyright") or "pyright"` 改成 `python -m pyright` 的 wrapper（已在 §8.2 提过，不重复记）。
+- `pip-audit` Windows 本地缺失同 §8.2 已登记，CI ubuntu-latest 会装，不影响。
+
+**新增里程碑**：阶段 3 wave3 把「§3 触发条件表」里的 *release changelog 由 `release-please` 接管* + *Pyright / mypy strict 接入（baseline → 0）* 两项提前激活为常驻基础设施。`pyright-baseline.json: diagnostics=[]` 后 CI lint job 等同于 strict 全绿闸；新增诊断会立刻 fail。剩余触发条件（multi-scale batch、OpenTelemetry、视觉回归、`safety` 第三方依赖扫描、k8s env 注入、多 Runner 实例并发等）继续按 §3 条件按需启动。
 
 ---
 
