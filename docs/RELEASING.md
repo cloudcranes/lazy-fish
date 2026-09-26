@@ -84,8 +84,10 @@ docker run --rm -p 8999:8999 -v "$PWD/data:/app/data" ghcr.io/cloudcranes/lazy-f
 
 1. 打开 Actions → **Release** workflow → **Run workflow**；
 2. 选择 `main` 分支；
-3. `version` 下拉选择一个版本（`v0.1.0` ~ `v1.0.0`），例如 `v0.2.0`；
+3. `version` 下拉选择一个版本（`v0.1.0` ~ `v2.0.0`），例如 `v0.2.0`；
 4. 点 **Run workflow**。
+
+> ⚠️ 1.0+ 手工 dispatch 拼档位列表：升 `v1.x` 需手动把新选项加进 `.github/workflows/release.yml` 的 `on.workflow_dispatch.inputs.version.options`（PR-19 已扩到 `v0.1.0..v2.0.0`，21 档），否则 GitHub UI 下拉里不会出现新版本。
 
 `Extract version` 在 `workflow_dispatch` 路径下从 `inputs.version` 取版本号（自动去掉可选的 `v` 前缀），下游：
 
@@ -137,6 +139,8 @@ make release-dispatch VERSION=v0.2.0      # 指定版本
 | GHCR 镜像看不到 | 检查 repo `Settings → Packages → Visibility`，新 repo 默认是 private |
 
 > **a11y 合并门槛（PR-17 起生效）**：PR-17 摘除了 `a11y` job 的 `continue-on-error: ${{ github.event_name == 'pull_request' }}`，Release PR 也会被阻塞；调试 release-please PR 时若 a11y 失败，优先定位 axe 报告的 serious/critical（moderate/minor 不阻塞），不要回退 `continue-on-error`。退出码语义 0/1/2 与 `tests/ui/a11y.mjs` 顶部注释一致。
+
+> **visual 合并门槛（PR-20 起生效）**：PR-20 摘除了 `visual` job 的 `continue-on-error: ${{ github.event_name == 'pull_request' }}`，与 a11y 同语义——PR + main 均 fail-fast，Release PR 也会被阻塞。调试 release-please PR 时若 visual 失败，优先核对 `tests/ui/diffs/*.diff.png` artifact 是否为预期样式改动；预期改动须走「带新 baseline 的 PR」而非「直推 main 重生成」。退出码语义 0/1/2 与 `tests/ui/visual.mjs` 顶部注释一致；baseline 已锁 playwright chromium 1.49.x 主线版（见 `docs/UI-DESIGN.md` §12.6），不要回退 `continue-on-error`。
 
 ## 6. 关联文件
 
