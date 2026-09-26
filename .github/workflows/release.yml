@@ -3,6 +3,7 @@ name: Release
 on:
   push:
     tags:
+      - "xyzw-auto-clicker-v*.*.*"
       - "v*.*.*"
   workflow_dispatch:
     inputs:
@@ -58,8 +59,10 @@ jobs:
             RAW="${INPUTS_VERSION:-${GITHUB_SHA:0:7}}"
             VERSION="${RAW#v}"
           else
-            # Tag push: ${GITHUB_REF_NAME} is the v*.*.* tag; strip the leading 'v'.
-            VERSION="${GITHUB_REF_NAME#v}"
+            # Tag push: ${GITHUB_REF_NAME} is the v*.*.* or xyzw-auto-clicker-v*.*.*
+            # tag; strip the leading 'v' and any component prefix.
+            VERSION="${GITHUB_REF_NAME#xyzw-auto-clicker-v}"
+            VERSION="${VERSION#v}"
           fi
           echo "VERSION=${VERSION}" >> "${GITHUB_OUTPUT}"
           echo "TAG=${VERSION}" >> "${GITHUB_OUTPUT}"
