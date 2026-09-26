@@ -103,6 +103,7 @@ docker run --rm -p 8999:8999 \
 | --- | --- | --- |
 | `LAZY_FISH_HOST` | `0.0.0.0`（容器）/ `127.0.0.1`（本地） | 监听地址 |
 | `LAZY_FISH_PORT` | `8999`（容器）/ `8765`（本地） | HTTP 端口 |
+| `LAZY_FISH_STOP_FILE` | `<BASE_DIR>/STOP`（本地）/ `/app/data/STOP`（容器 / Dockerfile） | 停止信号文件路径。文件存在即中止任务。容器默认落在 `./data` 卷内，重启不丢失；挂载位置变动时可自行覆盖。 |
 
 模板 / 方案 / 最后一帧缓存都通过 `./data` 卷持久化。
 

@@ -32,6 +32,9 @@ ENV PYTHONDONTWRITEBYTECODE=1 \
     PIP_DISABLE_PIP_VERSION_CHECK=1 \
     LAZY_FISH_HOST=0.0.0.0 \
     LAZY_FISH_PORT=8999 \
+    # PR-14：默认把停止信号文件落在 /app/data/STOP，与 data/ 卷同区，
+    # 容器重启或重建后 STOP 标记不会丢失。
+    LAZY_FISH_STOP_FILE=/app/data/STOP \
     PATH="/install/bin:${PATH}" \
     PYTHONPATH="/install/lib/python3.12/site-packages"
 

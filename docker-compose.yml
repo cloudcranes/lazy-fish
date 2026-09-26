@@ -13,6 +13,8 @@ services:
     environment:
       LAZY_FISH_HOST: 0.0.0.0
       LAZY_FISH_PORT: 8999
+      # PR-14：停止信号文件落进 ./data 卷所在目录，容器重启后状态保留。
+      LAZY_FISH_STOP_FILE: /app/data/STOP
     volumes:
       # Persist templates / plans / last-frame cache on the host.
       - ./data:/app/data

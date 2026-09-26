@@ -103,6 +103,7 @@ Configurable via env:
 | --- | --- | --- |
 | `LAZY_FISH_HOST` | `0.0.0.0` (container) / `127.0.0.1` (local) | bind address |
 | `LAZY_FISH_PORT` | `8999` (container) / `8765` (local) | HTTP port |
+| `LAZY_FISH_STOP_FILE` | `<BASE_DIR>/STOP` (local) / `/app/data/STOP` (container / Dockerfile) | Path to the stop sentinel. The runner aborts when this file exists. In containers the default lives inside `./data`, so the STOP flag survives restarts; override if you mount data elsewhere. |
 
 Templates, plans and the last-frame cache persist via the `./data` volume mount.
 
