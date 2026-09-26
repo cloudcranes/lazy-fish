@@ -75,32 +75,56 @@ docker pull ghcr.io/cloudcranes/lazy-fish:0.2.0
 docker run --rm -p 8999:8999 -v "$PWD/data:/app/data" ghcr.io/cloudcranes/lazy-fish:0.2.0
 ```
 
-## 3. 手动触发（应急路径）
+## 3. 手动触发发布（应急路径 / 解闸）
 
-> 仅在 release-please 失灵、或需要为某个 commit 单跑一次构建时使用。
+> 仅在 release-please 失灵、或需要为某个版本单跑一次发布时使用。
+> PR-16（wave5）起，dispatch 路径已**解闸**：可以独立完成构建 → 推 GHCR → 创建 GitHub Release，不再被 `event_name == 'push'` 闸拦住。
 
 ### 3.1 通过 GitHub UI
 
 1. 打开 Actions → **Release** workflow → **Run workflow**；
-2. 选择 `main` 分支，**不要**填输入（`release.yml` 当前没暴露 input）；
-3. 点 **Run workflow**。
+2. 选择 `main` 分支；
+3. `version` 下拉选择一个版本（`v0.1.0` ~ `v1.0.0`），例如 `v0.2.0`；
+4. 点 **Run workflow**。
 
-`Extract version` 在 `workflow_dispatch` 路径下用 `${GITHUB_SHA:0:7}` 作为 `VERSION`，避免 `GITHUB_REF_NAME=main` 这种无意义 tag 被推 GHCR。注意：`if: github.event_name == 'push'` 闸会拦住 publish 与 release 创建，所以这种触发只产生镜像，**不会**推到 GHCR，也不会生成 GitHub Release——目的是做本地验证。
+`Extract version` 在 `workflow_dispatch` 路径下从 `inputs.version` 取版本号（自动去掉可选的 `v` 前缀），下游：
 
-### 3.2 通过 Makefile（DEPRECATED）
+| 步骤 | dispatch 行为 |
+|---|---|
+| Login to GHCR | ✅ 执行 |
+| Build & push image | ✅ 推到 `ghcr.io/cloudcranes/lazy-fish:<version>` 与 `:latest`（`provenance: false`） |
+| Create GitHub release | ✅ 创建 Release，tag_name = `v<version>`（`generate_release_notes` 仅 tag push 启用） |
+
+⚠️ 注意：dispatch 不需要预先打 `v*.*.*` tag，也不会替你打 tag——如果希望这次发布的版本继续被 `release-please` 管理，请在合并下一批 Conventional Commits 后由 release-please 接管。
+
+### 3.2 通过 Makefile（DEPRECATED 但可用）
 
 ```bash
-make release-dispatch   # 走 gh workflow run release.yml --ref main
+make release-dispatch                     # 使用默认 VERSION=v0.1.0
+make release-dispatch VERSION=v0.2.0      # 指定版本
 ```
 
-**已弃用**：输出会明确提示改用 release-please PR；仅作为逃生口保留。
+底层调用 `gh workflow run release.yml --ref main -f version=<VERSION>`。要求 `gh` 已 `auth login` 且对仓库有 `workflow` 权限。
+
+**DEPRECATED**：输出会明确提示改用 release-please PR；仅作为逃生口保留。
+
+### 3.3 dispatch 与 tag push 的对比
+
+| 维度 | tag push | workflow_dispatch |
+|---|---|---|
+| 触发 | 推送 `v*.*.*` tag | GitHub UI / `gh workflow run` |
+| VERSION 来源 | `${GITHUB_REF_NAME#v}` | `inputs.version`（去 `v` 前缀） |
+| 推 GHCR | ✅ | ✅ |
+| 创建 GH Release | ✅ + 自动 release notes | ✅ + 手写 docker 片段（无 release notes） |
+| 打 git tag | 由 release-please 在 PR merge 时打 | 不打 |
+| 推荐用途 | 正式发布 | 应急重发、CI 验证、调试镜像 |
 
 ## 4. 不要做的事
 
 - ❌ 手动 `git tag v0.2.0 && git push origin v0.2.0`（绕过 changelog PR）；
 - ❌ 手动编辑 `.release-please-manifest.json` 跳版本；
 - ❌ 在 release PR 上点 **Rebase and merge**（release-please 需要 squash merge 来识别）；
-- ❌ 改 `release.yml` 的 `Extract version` 让 dispatch 也走 `${GITHUB_REF_NAME#v}`（会变成 `VERSION=main`，污染 GHCR tag）。
+- ❌ 改 `release.yml` 的 `Extract version` 让 dispatch 走 `${GITHUB_REF_NAME#v}`（会变成 `VERSION=main`，污染 GHCR tag）。当前 PR-16 已用 `inputs.version` 解闸。
 
 ## 5. 排障
 
@@ -109,7 +133,7 @@ make release-dispatch   # 走 gh workflow run release.yml --ref main
 | release-please 没开 PR | 检查 `.github/workflows/release-please.yml` 是否启用、push 是否触发 `main` 分支、commit 是否带 `feat:` / `fix:` 前缀 |
 | Release PR 卡在 merge | 确认 CI 全绿；可能有 `pull_request` 权限问题，必要时给 `GITHUB_TOKEN` 加 `contents: write, pull-requests: write` |
 | tag 推上去但 release.yml 没跑 | `.github/workflows/release.yml` 的 `on.push.tags` 是 `v*.*.*`，确认 tag 名格式 |
-| workflow_dispatch 跑出来的镜像 tag 是 `main` | 这是老 bug；当前 PR-13 已用 `${GITHUB_SHA:0:7}` 修复，确保用的是最新 `release.yml` |
+| workflow_dispatch 跑出来的镜像 tag 是 `main` 或 `GITHUB_SHA` | 这是老行为；当前 PR-16 已用 `inputs.version` 解闸，确保用的是最新 `release.yml`（`on.workflow_dispatch.inputs.version` 必须存在） |
 | GHCR 镜像看不到 | 检查 repo `Settings → Packages → Visibility`，新 repo 默认是 private |
 
 ## 6. 关联文件

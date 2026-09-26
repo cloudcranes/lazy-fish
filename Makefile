@@ -7,6 +7,7 @@ PIP       ?= $(PY) -m pip
 PORT      ?= 8765
 COMPOSE   ?= docker compose
 TAG       ?= dev
+VERSION   ?= v0.1.0
 
 .PHONY: help install dev run test test-core eval lint smoke-import format clean build compose-up compose-down compose-build release-dispatch
 
@@ -58,9 +59,9 @@ compose-down:  ## compose down
 compose-build:  ## build from local source via compose
 	COMPOSE_TAG=$(TAG) $(COMPOSE) build
 
-release-dispatch:  # DEPRECATED: use the release-please PR (see docs/RELEASING.md); this only triggers an ad-hoc workflow_dispatch build with VERSION=GITHUB_SHA short
+release-dispatch:  # DEPRECATED: prefer release-please PR (see docs/RELEASING.md); this triggers an ad-hoc workflow_dispatch build/publish using VERSION=... (default v0.1.0). Requires gh CLI authed against this repo.
 	@echo "DEPRECATED: 'make release-dispatch' is a manual escape hatch." >&2
 	@echo "Use Conventional Commits on main; release-please will open a Release PR." >&2
 	@echo "See docs/RELEASING.md for the canonical flow." >&2
 	@which gh >/dev/null 2>&1 || { echo "gh CLI required for workflow_dispatch (https://cli.github.com)" >&2; exit 1; }
-	gh workflow run release.yml --ref main
+	gh workflow run release.yml --ref main -f version=$(VERSION)
