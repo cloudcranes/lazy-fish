@@ -389,6 +389,62 @@ GET /api/health:
 
 **新增里程碑**：阶段 3 wave3 把「§3 触发条件表」里的 *release changelog 由 `release-please` 接管* + *Pyright / mypy strict 接入（baseline → 0）* 两项提前激活为常驻基础设施。`pyright-baseline.json: diagnostics=[]` 后 CI lint job 等同于 strict 全绿闸；新增诊断会立刻 fail。剩余触发条件（multi-scale batch、OpenTelemetry、视觉回归、`safety` 第三方依赖扫描、k8s env 注入、多 Runner 实例并发等）继续按 §3 条件按需启动。
 
+### 8.5 阶段 3 wave4 — release-please 闭环 + STOP_FILE env 可配置（已落地，2026-09-26）
+
+> wave4 把 wave3 留下的两个**已知偏差**关闭：① release.yml 在 `workflow_dispatch` 路径下 VERSION 退化为分支名（`main`），有污染 GHCR 命名空间风险；② `STOP_FILE` 写死 `BASE_DIR/STOP`，容器重启后状态丢失。commit 已在 origin/main（`120ea09..16f8f47 main -> main`）。
+
+**commit 链**（2 commits，按时间倒序）：
+
+| SHA | 说明 |
+|---|---|
+| `16f8f47` | feat: PR-13 release-please closure (Makefile release-dispatch + docs/RELEASING.md + dispatch short-SHA tag) |
+| `120ea09` | feat: make STOP_FILE path configurable via LAZY_FISH_STOP_FILE env (PR-14) |
+
+**PR-13：release-please 闭环**（commit `16f8f47`，3 文件 +140/-7）
+
+| 变更 | 文件 |
+|---|---|
+| `Extract version` 步新增 `workflow_dispatch` 分支，VERSION 取 `cut -c1-7` 短 SHA；tag push 路径保留 `${GITHUB_REF_NAME#v}` 不变 | `.github/workflows/release.yml` |
+| `release` target 重命名为 `release-dispatch`，单 `#` DEPRECATED 注释（不进 `make help`），warning 指向 `docs/RELEASING.md`；`.PHONY` 同步 | `Makefile` |
+| canonical 流程图（commit → release-please PR → merge → auto-tag → GHCR）+ 应急 dispatch 路径 + 排障表 + 关联文件 | `docs/RELEASING.md`（新） |
+
+**PR-14：STOP_FILE env 可配置**（commit `120ea09`，6 文件 +66/-2）
+
+| 变更 | 文件 |
+|---|---|
+| `STOP_FILE = Path(os.environ.get("LAZY_FISH_STOP_FILE", str(BASE_DIR/"STOP")))`，未设 env 仍走默认 | `xyzw_auto_clicker/settings.py` |
+| `LAZY_FISH_STOP_FILE: /app/data/STOP`（与 `./data` 卷同区，容器重启不丢） | `docker-compose.yml` |
+| runtime ENV 段 `LAZY_FISH_STOP_FILE=/app/data/STOP` | `Dockerfile` |
+| 配置表新增 `LAZY_FISH_STOP_FILE` 行（容器默认 `/app/data/STOP`，本地默认 `BASE_DIR/STOP`） | `README.md` / `README.zh-CN.md` |
+| 3 用例：未设 env 走默认、env 覆盖生效、撤掉 env 后无残留 | `tests/test_pr14_env.py`（新） |
+
+`runner.py` 未动（仍是 `STOP_FILE.exists()`），settings 是单一改动点，零回归风险。
+
+**总验收验证**（gate-reviewer 复核，2026-09-26）：
+
+- `python -m pytest tests/ -q` → **106 passed in 7.47s**（基线 103 + PR-14 新增 3，零回归）
+- `python -m ruff check .` → All checks passed!
+- `python -m py_compile xyzw_auto_clicker/settings.py xyzw_auto_clicker/runner.py tests/test_pr14_env.py` → exit 0
+- `python -m pyright xyzw_auto_clicker` → 0 errors, 0 warnings, 0 informations
+- YAML 解析：`.github/workflows/release.yml` + `release-please.yml` + `ci.yml` + `docker-compose.yml` 全部 `yaml.safe_load` OK
+- JSON 解析：`release-please-config.json` + `.release-please-manifest.json` OK
+- dispatch 路径语义：`GITHUB_EVENT_NAME == "workflow_dispatch"` → `VERSION=${GITHUB_SHA:0:7}`，不再退化为 `main` 分支名；`if: github.event_name == 'push'` 闸同步拦住 publish 与 GH Release 创建，dispatch 只做本地验证不污染 GHCR 命名空间
+- tag push 路径语义：`GITHUB_REF_NAME` 是 `v*.*.*` → `${GITHUB_REF_NAME#v}` 取出 `0.2.0` 形式版本号，构建+推 GHCR + 创建 GitHub Release 完整链路
+- STOP_FILE 兼容性：未设 `LAZY_FISH_STOP_FILE` → 走 `BASE_DIR/STOP` 默认值（兼容所有现存调用方）；设值后立刻反映新路径；monkeypatch 撤 env 后无残留（`test_pr14_env.py` 3 用例 PASS）
+- Makefile help 隔离：`release-dispatch` 注释是单 `# DEPRECATED: ...`，不匹配 `^[a-zA-Z_-]+:.*?## ` 模式，不会进 `make help` 列表；但仍可在 shell 直接 `make release-dispatch` 触发应急入口
+- READMEs 已无 `make release VERSION=` 引用；新增 `LAZY_FISH_STOP_FILE` 配置表行（EN + zh-CN 一致）
+- commit 范围核对：PR-13 in-scope（`Makefile` + `.github/workflows/release.yml` + `docs/RELEASING.md`）全部入 commit；PR-14 in-scope（`xyzw_auto_clicker/settings.py` + `docker-compose.yml` + `Dockerfile` + `README.md` + `README.zh-CN.md` + `tests/test_pr14_env.py`）全部入 commit；`runner.py` 按设计保持不动
+- `git log --oneline -20` 显示 `16f8f47` / `120ea09` 已在 main 上，与依赖结果 SHA 一致
+
+**未闭合项 / 已知偏差**：
+
+- wave3 §8.4 留下的两个未闭合项（dispatch VERSION 退化 + Makefile `release` 死代码）已由 wave4 关闭：前者 `release.yml` 加 dispatch 分支取短 SHA，后者 `release` target 重命名为 `release-dispatch` 并打 DEPRECATED 标。
+- `pyright` console-script Windows fallback 与 `pip-audit` Windows 本地缺失同 §8.2 / §8.4 已登记，CI ubuntu-latest 无此问题，不重复记。
+- `make release-dispatch` 走 `gh workflow run release.yml --ref main` + `gh` CLI 依赖；当前 `release.yml` 的 `workflow_dispatch` 路径只产生镜像不推 GHCR（`if: github.event_name == 'push'` 闸住），若需要把手动 dispatch 也升格为正式发布，应在 `release.yml` 解除该闸并加 `inputs.version` 让调用方指定（**非阻断**，等真正使用前再做）。
+- `LAZY_FISH_STOP_FILE` env 在 settings 模块**加载时**读取，运行时改 env 不会立即生效（与 `LAZY_FISH_HOST` / `LAZY_FISH_PORT` 等保持一致语义）；如需运行时热切换 STOP_FILE，应在 `runner._should_stop` 改为读环境变量（**非阻断**，当前没有这个需求）。
+
+**新增里程碑**：阶段 3 wave4 把 wave3 留下的两个偏差（dispatch 路径 VERSION 退化 + `STOP_FILE` 写死）收口为正式发版基础设施；release-please → tag → release.yml 的 canonical 路径在 `docs/RELEASING.md` 文档化；容器内 STOP 标记现与 `./data` 卷同区，重启不丢状态。剩余触发条件（multi-scale batch、OpenTelemetry、视觉回归、`safety` 第三方依赖扫描、多 Runner 实例并发等）继续按 §3 条件按需启动。
+
 ---
 
 > 关联文档：[docs/RECOGNITION-RESEARCH.md](./RECOGNITION-RESEARCH.md)（识别根因 + 实验数据）。
