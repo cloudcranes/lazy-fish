@@ -762,7 +762,7 @@ GET /api/health:
 
 > wave10 把 §8.10.1 附录里「OTLP 端到端需真实 OTel Collector 实例」的未闭合项收口：`docker-compose.yml` 内置 `otel-collector` sidecar（`otel/opentelemetry-collector-contrib:0.118.0`），lazy-fish 的 `OTEL_EXPORTER_OTLP_ENDPOINT` 改为 `http://otel-collector:4317`（不再指向宿主机），并用 `depends_on: condition: service_healthy` 保证 collector 就绪后才启动 lazy-fish。collector 端到端验证清单落到 §8.10.1 附录。
 
-**PR-25：OTel collector sidecar**（commit `<SHA>`，3 文件）
+**PR-25：OTel collector sidecar**（commit `e750089`，4 文件 +174/-3）
 
 | 变更 | 文件 |
 |---|---|
