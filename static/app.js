@@ -272,12 +272,13 @@ function focusNavItem(index) {
 }
 
 function bindNavKeyboard() {
+  // 注：wave6 曾注入 role=tablist/tab 三件套，但 nav 混有品牌区/分组/工具按钮
+  // （nav-mini），tablist 的直接子元素必须全是 tab 语义，axe aria-required-children
+  // 报 critical。回退为普通按钮导航：保留方向键移动焦点与 aria-current，
+  // 不引入 tab 语义（方向键行为对普通按钮同样合法）。
   const navList = document.querySelector(".nav");
   if (!navList) return;
-  navList.setAttribute("role", "tablist");
-  navList.setAttribute("aria-orientation", "vertical");
   document.querySelectorAll("[data-nav]").forEach((btn) => {
-    btn.setAttribute("role", "tab");
     btn.setAttribute("aria-controls", `view-${btn.dataset.nav}`);
     const panel = $(`view-${btn.dataset.nav}`);
     if (panel) panel.setAttribute("aria-labelledby", btn.id || "");

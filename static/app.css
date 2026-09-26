@@ -197,7 +197,7 @@ pre,
 }
 .nav-brand-text span {
   font-size: var(--fs-11);
-  color: var(--text-tertiary);
+  color: var(--text-secondary);
 }
 
 .nav-group {
