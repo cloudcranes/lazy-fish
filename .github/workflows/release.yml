@@ -38,7 +38,7 @@ jobs:
             VERSION="${VERSION#v}"
           elif [ "${GITHUB_EVENT_NAME}" = "workflow_dispatch" ]; then
             # Manual dispatch: use the version input; strip optional leading 'v'.
-            RAW="${INPUTS_VERSION:-${GITHUB_SHA:0:7}}"
+            RAW="${INPUT_VERSION:-${GITHUB_SHA:0:7}}"
             VERSION="${RAW#v}"
           else
             # Tag push: ${GITHUB_REF_NAME} is the v*.*.* or xyzw-auto-clicker-v*.*.*
