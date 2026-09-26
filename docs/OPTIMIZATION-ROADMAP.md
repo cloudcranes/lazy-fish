@@ -667,17 +667,18 @@ GET /api/health:
 
 ### 8.10 阶段 3 wave9 — OTel pytest 噪声收口 + OTLP exporter 接入（已落地，2026-09-26）
 
-> wave9 把 §3 表里 wave8 留下的两个**非阻断短板**同时关闭：① pytest 跑完 `test_pr21_tracing.py` 后偶现 OTel 后台线程 `ValueError: I/O operation on closed file`（BSP daemon 在 pytest 关闭 capture 后还在异步 flush 已闭 stdout）；② collector-side OTLP wiring 未接（PR-21 仅做 console 兜底）。commit 已在 origin/main（`d32cc62..b6246bc main -> main`）。
+> wave9 把 §3 表里 wave8 留下的两个**非阻断短板**同时关闭：① pytest 跑完 `test_pr21_tracing.py` 后偶现 OTel 后台线程 `ValueError: I/O operation on closed file`（BSP daemon 在 pytest 关闭 capture 后还在异步 flush 已闭 stdout）；② collector-side OTLP wiring 未接（PR-21 仅做 console 兜底）。两个 commit 已在 origin/main（`d32cc62..09276da main -> main`，PR-24 先落、PR-23 收口）。
 
-**commit 链**（1 commit）：
+**commit 链**（2 commits）：
 
 | SHA | 说明 |
 |---|---|
-| `b6246bc` | feat(observability): OTLP exporter 接入（PR-24） |
+| `8e54507` | feat(observability): OTLP exporter 接入（PR-24） |
+| `09276da` | fix(otel): pytest 噪声收口（PR-23） |
 
-> PR-23（provider.shutdown pytest 噪声收口）由其他成员在另一 PR 独立提交，本 wave9 §8.10 仅记录 PR-24；pytest stderr 偶现 `ValueError: I/O operation on closed file` 由 PR-23 关闭。
+> PR-23（provider.shutdown pytest 噪声收口）与 PR-24 同属 wave9，先后独立提交：PR-24 挂 OTLP exporter + 三分支；PR-23 用 `force_shutdown()` + autouse fixture 把 pytest stderr 偶现 `ValueError: I/O operation on closed file` 关闭。
 
-**PR-24：OTLP exporter 接入**（commit `b6246bc`，7 文件 +209/-11）
+**PR-24：OTLP exporter 接入**（commit `8e54507`，7 文件 +209/-11）
 
 | 变更 | 文件 |
 |---|---|
@@ -734,7 +735,17 @@ GET /api/health:
 3. Collector exporters 按需配 Jaeger / Tempo / OTLP/HTTP 转发；本仓库不绑死后端；
 4. 想退回纯 stderr span 输出：取消 ENV 行（`docker compose run -e OTEL_EXPORTER_OTLP_ENDPOINT=` 或删 Dockerfile ENV）；pytest 默认就走 console，不需要任何配置。
 
-**新增里程碑**：阶段 3 wave9 把 wave8 留下的「pytest BSP 噪声」+「OTLP 未接」两个非阻断项收口为正式基础设施：① `force_shutdown()` + autouse fixture 把 BSP daemon thread 的 I/O closed ValueError 消声，pytest exit code 0 + 117+1 例全绿；② OTLP gRPC exporter 默认挂上，docker-compose / Dockerfile 开箱即发到宿主机 Collector，env 三态（生产 / 本地 dev / 完全关）矩阵清晰。`§3 触发条件表` 的「OpenTelemetry auto-instrumentation」已完全闭环（trace 采集 + 导出 + 后端解耦），剩余触发条件（multi-scale batch、`safety` 第三方依赖扫描、多 Runner 实例并发等）继续按 §3 条件按需启动。
+**新增里程碑**：阶段 3 wave9 把 wave8 留下的「pytest BSP 噪声」+「OTLP 未接」两个非阻断项收口为正式基础设施：① `force_shutdown()` + autouse fixture 把 BSP daemon thread 的 I/O closed ValueError 消声，pytest exit code 0 + 119 例全绿；② OTLP gRPC exporter 默认挂上，docker-compose / Dockerfile 开箱即发到宿主机 Collector，env 三态（生产 / 本地 dev / 完全关）矩阵清晰。`§3 触发条件表` 的「OpenTelemetry auto-instrumentation」已完全闭环（trace 采集 + 导出 + 后端解耦），剩余触发条件（multi-scale batch、`safety` 第三方依赖扫描、多 Runner 实例并发等）继续按 §3 条件按需启动。
+
+**PR-23：OTel pytest 噪声收口**（commit `09276da`，3 文件 +107/-10）
+
+| 变更 | 文件 |
+|---|---|
+| `shutdown_tracer()` 增 `timeout_millis=2000` 防御性 flush（不阻塞 uvicorn 优雅退出）；新增 `force_shutdown()`：flush + shutdown + 全局/gc 兜底（处理 monkeypatch 替换旧 provider 后 BSP 漏 worker）；`configure_tracer` 首次建 provider 时 `atexit.register(force_shutdown)` 做进程退出兜底 | `xyzw_auto_clicker/tracing_setup.py` |
+| lifespan shutdown 改调 `shutdown_tracer(timeout_millis=2000)` | `xyzw_auto_clicker/app.py` |
+| autouse fixture 每条用例 teardown 调 `force_shutdown()`；新增 `test_shutdown_cleans_bsp` 断言 BSP `_worker_thread.is_alive()` 在 shutdown 后变 False | `tests/test_pr21_tracing.py` |
+
+**wave9 总验收（gate-reviewer，2026-09-26）**：PASS。pytest `tests/` 119 passed（含 PR-23 `test_shutdown_cleans_bsp` + PR-24 `test_otlp_path_initializes_when_endpoint_set`），stderr 全程静默（无 OTel BSP `I/O operation on closed file`）；`OTEL_EXPORTER_OTLP_ENDPOINT` 设值 → provider 挂 `OTLPSpanExporter`，未设值 → `ConsoleSpanExporter`（stdout 活着时）逐路径实测通过；`docker-compose.yml` / `Dockerfile` 默认 ENV 双写一致；`docs/RELEASING.md §3.0` 指向 §8.10.1。未闭合项：OTLP 端到端需真实 OTel Collector 实例（本机未部署，属 §3 触发条件项，不影响 PASS）。
 
 ---
 
