@@ -724,7 +724,7 @@ GET /api/health:
 
 | 部署形态 | `OTEL_EXPORTER_OTLP_ENDPOINT` | exporter 实际走向 | 备注 |
 |---|---|---|---|
-| **生产**（默认） | `http://host.docker.internal:4317`（Dockerfile / compose 设置） | `OTLPSpanExporter` → Collector → 后端 | 容器化部署开箱即用；改 endpoint 即可换 Collector |
+| **生产**（默认） | `http://otel-collector:4317`（compose 内置 sidecar，PR-25） | `OTLPSpanExporter` → Collector → 后端 | 容器化部署开箱即用；`docker-compose.yml` 已内置 `otel-collector` 服务 |
 | **CI / 本地 dev** | 未设值（pytest / 直接 `python -m xyzw_auto_clicker`） | `ConsoleSpanExporter` → stderr | `tracing_setup._stdout_alive()` 守卫：pytest capture 关闭时不挂，避免后台 flush 写满屏 ValueError |
 | **完全关 OTel** | 未设值 + `OTEL_SDK_DISABLED=true` | NoOp tracer（不进 SDK） | 与 PR-21 契约一致 |
 
@@ -782,6 +782,16 @@ GET /api/health:
 6. 关掉：`docker compose down`（collector 与 lazy-fish 一起停）。
 
 **wave10 总验收（gate-reviewer）**：PASS。pytest `tests/` 119 passed（含新增 `test_pr25_collector_compose.py`；本机无 docker 时该测试跳过，其余 119 例全绿）；`docker-compose.yml` YAML 解析通过（compose 解析测试在不跳过的环境用 `docker compose config` 验证服务/端口/env/depends_on）；`.otel/collector.yaml` YAML 解析通过；endpoint 契约与 PR-24 的 env 矩阵一致（生产=compose 内 collector、本地 dev=console、完全关=NoOp）。未闭合项：真实 docker daemon 下的 `docker compose up` + `curl :8889/metrics` 端到端需有 docker 的机器执行（属环境能力，非代码缺口）。
+
+**PR-26：多 Runner 并发（多设备并行）**（commit `6e189c1`，3 文件 +259/-16）
+
+| 变更 | 文件 |
+|---|---|
+| `RunnerState` 加 `device_id`；`TaskRunner.start` 用 `asyncio.create_task` 隔离、state 各自独立；新增 `RunnerRegistry`（device_id→runner，`get_or_create` / `get` / `snapshots`） | `xyzw_auto_clicker/runner.py` |
+| `/api/tasks/chest/start` 支持 `device_id` 参数；`/api/tasks/state` 支持 `?device_id=` 单查 + 不传返回默认快照并附 `devices` 分组；`/api/tasks/stop` 支持 `device_id` 白名单校验；默认(None)设备落 key=`""` runner，旧接口契约不变 | `xyzw_auto_clicker/app.py` |
+| 新增并发测试 4 例：注册表复用、两设备并发互不干扰 + state 独立、默认设备隔离、stop 只停指定设备 | `tests/test_pr26_concurrency.py`（新） |
+
+**wave10 总验收（gate-reviewer，2026-09-27）**：PASS。pytest `tests/` 126 passed + 1 skipped（本机无 docker：仅 `test_docker_compose_config_resolves` 跳过）；`py_compile` 全过；`docker-compose.yml` / `.otel/collector.yaml` YAML 解析通过（services 含 otel-collector + lazy-fish，lazy-fish depends_on otel-collector service_healthy，endpoint 指向 compose 内 collector）；两 device 并发实测通过：`test_two_devices_run_concurrently_with_independent_state` 两设备并行 3/2 次点击互不干扰、state 各自独立，`test_stop_isolates_one_device` stop 只停指定设备。未闭合项：① 真实 docker daemon 下的 `docker compose up` + `curl :8889/metrics` 端到端需有 docker 的机器执行（环境能力，非代码缺口）；② 多 Runner 并发的「单 ADB 客户端多设备」仅经 mock adb 验证，真实 adb server（`adb devices` 多设备 + `-s <serial>`）接入后需按 §3 触发条件做真机冒烟（设备参数 `device_id` 已透传到 `adb.screenshot_png` / `adb.tap`，接口就位）。
 
 ---
 
