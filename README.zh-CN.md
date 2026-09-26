@@ -225,14 +225,22 @@ make test          # pytest tests/test_core.py
 make eval          # 真机语料回归
 make build         # docker build -> lazy-fish:dev
 make compose-up    # compose up（拉 ghcr.io/cloudcranes/lazy-fish:latest）
-make release VERSION=0.1.0   # 打 tag + push，CI 构建并发布
 ```
 
 ### 发布版本
 
-1. 在 `main` 上正常提交。
-2. `make release VERSION=x.y.z` —— 推送 `vx.y.z` tag。
-3. `.github/workflows/release.yml` 跨架构构建（`linux/amd64,linux/arm64`），推送到 `ghcr.io/cloudcranes/lazy-fish`，并生成 GitHub Release（附 docker run 片段）。
+使用 [release-please](https://github.com/googleapis/release-please) —— 无需手动打 tag。
+
+1. 在 `main` 上按 [Conventional Commits](https://www.conventionalcommits.org/) 规范提交：
+   - `feat: ...` → minor 版本号
+   - `fix: ...` → patch 版本号
+   - `feat!: ...` 或 `BREAKING CHANGE:` 脚注 → major 版本号
+   1.0 之前（`0.x.y`）：`feat` → minor，`fix` → patch。
+2. 推送到 `main`。**Release Please** 工作流（`.github/workflows/release-please.yml`）会开/更新一个 `Release-please` PR，含 changelog 与版本号变更。
+3. 合入该 PR，release-please 自动打 tag（如 `v0.2.0`）并推送。
+4. tag push 触发 `.github/workflows/release.yml`，跨架构构建镜像（`linux/amd64,linux/arm64`），推送到 `ghcr.io/cloudcranes/lazy-fish`，并生成 GitHub Release（附 docker run 片段）。
+
+初始版本号记录在 `.release-please-manifest.json`（当前 `0.1.0`）。如需手动触发一次性发版，可在 Actions 页面对 **Release Please** 工作流点 *Run workflow*。
 
 ---
 

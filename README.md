@@ -225,14 +225,22 @@ make test          # pytest tests/test_core.py
 make eval          # recognition regression on real footage
 make build         # docker build -> lazy-fish:dev
 make compose-up    # compose up (pulls ghcr.io/cloudcranes/lazy-fish:latest)
-make release VERSION=0.1.0   # tag + push, CI builds & publishes
 ```
 
 ### Publishing a release
 
-1. Bump / commit whatever you want on `main`.
-2. `make release VERSION=x.y.z` — pushes the `vx.y.z` tag.
-3. `.github/workflows/release.yml` builds multi-arch images (`linux/amd64,linux/arm64`), pushes to `ghcr.io/cloudcranes/lazy-fish`, and creates a GitHub release with the docker run snippet.
+We use [release-please](https://github.com/googleapis/release-please) — no manual tagging.
+
+1. Commit on `main` following [Conventional Commits](https://www.conventionalcommits.org/):
+   - `feat: ...` → minor bump
+   - `fix: ...` → patch bump
+   - `feat!: ...` or `BREAKING CHANGE:` footer → major bump
+   Pre-1.0 (`0.x.y`): `feat` → minor, `fix` → patch.
+2. Push to `main`. The **Release Please** workflow (`.github/workflows/release-please.yml`) opens / updates a `Release-please` PR with changelog + version bump.
+3. Merge that PR. release-please tags the commit (e.g. `v0.2.0`) and pushes the tag.
+4. The tag push triggers `.github/workflows/release.yml`, which builds multi-arch images (`linux/amd64,linux/arm64`), pushes to `ghcr.io/cloudcranes/lazy-fish`, and creates a GitHub release with the docker run snippet.
+
+Initial version is tracked in `.release-please-manifest.json` (currently `0.1.0`). To cut a one-off release manually, run **Release Please** via *Run workflow* in the Actions tab.
 
 ---
 

@@ -22,11 +22,7 @@ jobs:
       - name: Extract version
         id: version
         run: |
-          if [ "${GITHUB_REF_TYPE}" = "tag" ]; then
-            VERSION="${GITHUB_REF_NAME#v}"
-          else
-            VERSION="dev-${GITHUB_SHA::7}"
-          fi
+          VERSION="${GITHUB_REF_NAME#v}"
           echo "VERSION=${VERSION}" >> "${GITHUB_OUTPUT}"
           echo "TAG=${VERSION}" >> "${GITHUB_OUTPUT}"
 
