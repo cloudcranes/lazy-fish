@@ -153,3 +153,43 @@ make release-dispatch VERSION=v0.2.0      # 指定版本
 | `Makefile`（`release-dispatch`） | DEPRECATED 应急入口 |
 | `README.md` / `README.zh-CN.md` | 面向用户的发布说明 |
 | `docs/OPTIMIZATION-ROADMAP.md` §3 | 触发条件表（release-please 已激活） |
+
+## 6. 升 1.0 前 checklist（PR-22 评估）
+
+> 触发条件：`docs/OPTIMIZATION-ROADMAP.md` §3 表「release-please 升 1.0 评估」触发项；本节是 PR-22 落地时的快照，下一次手动升 1.0 之前请逐条复核。
+> 升 1.0 一旦发生：`release-please-config.json` 的 `bump-minor-pre-major: true` / `bump-patch-for-minor-pre-major: true` 自动 fall through 到 release-please 默认 major 规则（PR-19 已确认），且 §1 表里的 `feat!:` / `BREAKING CHANGE` 行从「minor 升级」变回「major 升级」，所有下游文档（README、CHANGELOG 标题、GitHub Release）将出现首次反映 + 在 title/notes 出现「1.0.0」字样。
+> 因此升 1.0 之前**必须**确认下面 6 条都已收口，否则就是「赌下游兼容性」。
+
+| # | 项 | 谁负责 | 复核路径 |
+|---|---|---|---|
+| 1 | **API 稳定**：所有 `/api/*` 路由的请求 / 响应字段名与类型不再变动；新功能只能新增路由 / 新增字段，不能改既有字段语义 | FS | `git grep -nE "^(async )?def (get\|post\|put\|delete)" xyzw_auto_clicker/app.py` + `tests/test_pr8_contract.py` + `tests/test_pr15_metrics.py` 全绿 |
+| 2 | **字段冻结**：`xyzw_auto_clicker/models.py` 所有 Pydantic model 不再删字段、不再改类型；新增字段须走次版本（< 1.0 走 minor，≥ 1.0 走 minor 因 `bump-minor-pre-major=true` 已失效，需提前评估是否切 major） | BE | `git diff v0.x.0 -- xyzw_auto_clicker/models.py` 应为空（升 1.0 当下）；`tests/test_pr6_contract.py` 全绿 |
+| 3 | **模板系统固化**：`xyzw_auto_clicker/matcher.py` 模板 schema（`_TemplateEntry` 字段集）冻结；hot path TTL / LRU / `_roi_rect_cache` 参数已是常驻基础设施（PR-8 落地） | BE | `docs/OPTIMIZATION-ROADMAP.md` §8.3 PR-8 行确认 `HOT_PATH_TTL_SECONDS=60` / `ROI_CACHE_MAXSIZE=128` 已沉淀；`tests/test_pr8_contract.py` 16 例全绿 |
+| 4 | **计划 schema stable**：`plans.PlanPayload` / `CropRequest`（`safe_field_name` + `CROP_MAX_DIM` + `CROP_MAX_AREA`，PR-8 + PR-12 落地）已无破坏性变更；保存的 `.json` 计划文件可被新版本读回且行为一致 | BE | `tests/test_pr6_contract.py` + `tests/test_pr8_contract.py` 全绿；手动 `python -c "import json; PlanPayload.model_validate(json.load(open('data/plans/sample.json')))"` 不抛 |
+| 5 | **部署文档完备**：`README.md` / `README.zh-CN.md` / `docs/RELEASING.md` 三处版本说明一致；`docs/UI-DESIGN.md` §11 / §12 与 `docs/RELEASING.md` §5 双 a11y + visual 合并门槛注脚已锁定（PR-17 / PR-20 已落） | OPS + FE | `grep -nE "v1\\.0\\.0\|1\\.0" README.md README.zh-CN.md docs/RELEASING.md docs/UI-DESIGN.md` 不出现「1.0 + 行为改动」字样（仅版本号本身）；`docs/RELEASING.md` §5 a11y + visual 脚注齐全 |
+| 6 | **breaking change 梳理**：从 `v0.1.0` 到当前 head 的所有 `feat!:` / `BREAKING CHANGE:` commits 已归并到 CHANGELOG.md「Breaking Changes」节，且每个都注明「影响面 / 迁移路径」 | FS + BE | `git log --grep="BREAKING CHANGE\\|feat!" --oneline v0.1.0..HEAD` 列出的 commit 数 == CHANGELOG.md「Breaking Changes」条目数；`docs/OPTIMIZATION-ROADMAP.md` §6 风险登记里的「PR-1 后端改 `last_screenshot` 字段名」之类条目已勾掉 |
+
+**升 1.0 操作步骤**（checklist 全绿后才能动）：
+
+1. **关闭 minor-pre-major 闸**（`release-please-config.json`）：
+   ```jsonc
+   {
+     "releaseType": "python",
+     "packageName": "lazy-fish",
+     "bump-minor-pre-major": false,         // 由 true 改 false
+     "bump-patch-for-minor-pre-major": false // 由 true 改 false
+   }
+   ```
+   > ⚠️ 升 1.0 当天**不要** 同时改这两个 flag + 提交第一个 `feat!:`：先单独立一个 `chore(release): drop bump-minor-pre-major before 1.0` commit 让 release-please 把当前 `0.x.x` 推到 `1.0.0`，下一批 Conventional Commits 才走 major 规则。
+
+2. **CHANGELOG.md 升段标题**：把「## [Unreleased]」改「## [1.0.0] - <date>」，并在顶部加一行 `## 🎉 1.0 稳定版` 说明（本节 checklist 6 条全过的证据链）。
+
+3. **发版闸自检**：升 1.0 前 24 小时内跑完 `pytest tests/ -q`（必须 112 例全绿）+ `node --check tests/ui/{a11y,visual}.mjs` + `python -m ruff check .` + `python scripts/pyright_check.py`（必须 0 诊断）。
+
+4. **README 三处对齐**：`README.md` / `README.zh-CN.md` 顶部徽章 / 安装段 / 配置表里所有「0.x」改成「1.x」；`docs/RELEASING.md` §1 表的「影响（< 1.0，当前）」列去掉（升 1.0 后无意义）。
+
+5. **首次反映后守门**：升 1.0 后第一个 `feat!:` commit 必须显式带 `BREAKING CHANGE:` 脚注说明影响面，让 release-please 把版本号推到 `2.0.0` 而不是 minor；如不希望跳 major，把 `bump-minor-pre-major` 重新打开即可（**不建议**，升 1.0 的目的就是切 major 闸）。
+
+**未升 1.0 前的提示**：当前（PR-22 落地后）`release-please-config.json` 仍维持 `bump-minor-pre-major: true` + `bump-patch-for-minor-pre-major: true`；`prerelease: false` 显式标注（PR-22 新增），1.0 当天不打 rc。`docs/RELEASING.md` §2.1 表里的 `< 1.0` 列保持有效。
+
+> **关联引用**：`docs/OPTIMIZATION-ROADMAP.md` §3 表「release-please 升 1.0 评估」触发项（PR-22 已勾掉）；§6 风险登记里所有「字段名变更」类条目都已关闭（PR-1 + PR-8 + PR-12 三轮落地）；§8.4 / §8.5 / §8.6 / §8.7 持续把 release-please 链路打磨成正式基础设施。

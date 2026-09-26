@@ -136,9 +136,10 @@
 | 视觉回归（Playwright pixel diff） | FE §6 缺口 #2 | 1d | UI 改版频率 > 1/月时 |
 | axe-core 接入 CI | FE §6 缺口 #1 | 0.5d | 发版前 |
 | `STOP_FILE` 改 env 注入 | BE §4-低 #1 | 0.5h | 上 k8s 时 |
-| release changelog 由 `release-please` 接管 | OPS §5-低 #3 | 1d | 引入 conventional commits 时 |
+| release changelog 由 `release-please` 接管 | OPS §5-低 #3 | 1d | ✅ 已完成（PR-11/13/16/19/wave3/4/5/7 落地；见 §6） |
 | Pydantic `TaskConfig` 增字段校验（crop_x/y/w/h） | BE §4-中 #5 后半 | 0.5d | 后续 plan 直接配置 crop 时 |
 | OTel / Prometheus `/metrics` 导出 | BE §3-高 #2 | 1d | metrics 需求出现 |
+| release-please 升 1.0 评估 | — | 0.5d | ✅ 已完成（PR-22 落地；详见 `docs/RELEASING.md` §6「升 1.0 前 checklist」） |
 
 **owner**：按归属逐项。**口径**：无验收标准，等触发条件。
 

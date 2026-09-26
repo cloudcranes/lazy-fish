@@ -2,5 +2,6 @@
   "releaseType": "python",
   "packageName": "lazy-fish",
   "bump-minor-pre-major": true,
-  "bump-patch-for-minor-pre-major": true
+  "bump-patch-for-minor-pre-major": true,
+  "prerelease": false
 }
