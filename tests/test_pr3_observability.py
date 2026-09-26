@@ -32,6 +32,12 @@ class _StubAdb:
     async def screenshot_png(self, device_id=None):
         return _TINY_PNG
 
+    async def reconnect_all(self):
+        return None
+
+    def remote_status(self):
+        return {}
+
 
 def _install_stubs(tmp_path, monkeypatch):
     monkeypatch.setattr(AdbClient, "__init__", lambda self: None)

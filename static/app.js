@@ -647,8 +647,57 @@ async function loadDevices({ quiet = false } = {}) {
   }
   // 手动输入框跟随后端返回的选中设备，避免浏览器自动填充的旧值盖掉真实设备
   if (options.length) $("deviceId").value = $("deviceSelect").value;
+  renderRemotes(data.remotes || {});
   renderSummaries();
   if (!quiet) toast(data.devices.length ? "设备检测完成" : "未发现设备，请检查 ADB 连接", data.devices.length ? "success" : "warn");
+}
+
+/* PR-27：远程 ADB 设备列表渲染 + 连接/断开 */
+function renderRemotes(remotes) {
+  const el = $("remoteList");
+  const entries = Object.entries(remotes);
+  el.innerHTML = "";
+  if (!entries.length) {
+    el.textContent = "暂无已保存的远程设备";
+    return;
+  }
+  for (const [host, ok] of entries) {
+    const row = document.createElement("span");
+    row.className = "remote-item";
+    row.innerHTML = `<code>${host}</code> <span class="${ok ? "remote-ok" : "remote-bad"}">${ok ? "已连接" : "离线"}</span>`;
+    if (ok) {
+      const btn = document.createElement("button");
+      btn.type = "button";
+      btn.className = "btn btn-sm btn-ghost";
+      btn.textContent = "断开";
+      btn.onclick = () => remoteDisconnect(host);
+      row.appendChild(btn);
+    }
+    el.appendChild(row);
+  }
+}
+
+async function remoteConnect() {
+  const host = $("remoteHost").value.trim();
+  if (!host) return toast("请填写 host:port", "warn");
+  try {
+    await api("/api/devices/connect", { method: "POST", body: JSON.stringify({ host }) });
+    $("remoteHost").value = "";
+    toast("远程设备已连接", "success");
+    await loadDevices({ quiet: true });
+  } catch (e) {
+    toast("连接失败：" + (e.message || e), "error");
+  }
+}
+
+async function remoteDisconnect(host) {
+  try {
+    await api("/api/devices/disconnect", { method: "POST", body: JSON.stringify({ host }) });
+    toast("已断开 " + host, "success");
+    await loadDevices({ quiet: true });
+  } catch (e) {
+    toast("断开失败：" + (e.message || e), "error");
+  }
 }
 
 /* --------------------------------------------------------------------------
@@ -1460,6 +1509,7 @@ function bindActions() {
   });
   on("loadDevices", () => loadDevices());
   on("rescanDevice", () => loadDevices());
+  on("remoteConnect", remoteConnect);
   on("shotBtn", takeShot);
   on("saveTemplate", saveTemplate);
   on("refreshTemplates", () => loadTemplates());

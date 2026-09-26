@@ -263,6 +263,12 @@ def test_app_http_middleware_emits_span(monkeypatch, tmp_path):
         async def screenshot_png(self, device_id=None):
             return b""
 
+        async def reconnect_all(self):
+            return None
+
+        def remote_status(self):
+            return {}
+
     try:
         monkeypatch.setattr(AdbClient, "__init__", lambda self: None)
         monkeypatch.setattr(app_module, "adb", _StubAdb())

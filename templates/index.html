@@ -441,6 +441,15 @@
                         <input class="input mono" id="deviceId" placeholder="可留空，自动填入" autocomplete="off" spellcheck="false" />
                         <span class="field-hint">留空即可，检测后自动同步为上方所选设备</span>
                       </label>
+                      <label class="field">
+                        <span class="field-label">远程 ADB 设备</span>
+                        <div class="field-row">
+                          <input class="input mono" id="remoteHost" placeholder="192.168.1.10:5555" autocomplete="off" spellcheck="false" />
+                          <button class="btn btn-ghost" type="button" id="remoteConnect">连接</button>
+                        </div>
+                        <span class="field-hint">填入 host:port 点连接，成功后自动保存，下次启动自动重连</span>
+                        <div class="field-hint mono" id="remoteList"></div>
+                      </label>
                       <button class="btn btn-ghost" type="button" id="loadDevices">检测设备</button>
                     </div>
                   </section>

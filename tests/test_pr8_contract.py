@@ -48,6 +48,12 @@ class _StubAdb:
     async def screenshot_png(self, device_id=None):
         return _TINY_PNG
 
+    async def reconnect_all(self):
+        return None
+
+    def remote_status(self):
+        return {}
+
 
 def _install_stubs(tmp_path, monkeypatch, *, log_json: str | None = None):
     """装好 adb/matcher/runner 桩 + tmp 目录。

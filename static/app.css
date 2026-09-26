@@ -576,6 +576,41 @@ pre,
   min-width: 0;
 }
 
+.field-row {
+  display: flex;
+  gap: var(--sp-2);
+  align-items: center;
+}
+
+.field-row .input {
+  flex: 1;
+  min-width: 0;
+}
+
+.field-row .btn {
+  flex: none;
+}
+
+.remote-item {
+  display: inline-flex;
+  align-items: center;
+  gap: var(--sp-1);
+  margin-right: var(--sp-2);
+  font-size: var(--fs-11);
+}
+
+.remote-item code {
+  color: var(--text-secondary);
+}
+
+.remote-ok {
+  color: var(--success-fg);
+}
+
+.remote-bad {
+  color: var(--danger-fg);
+}
+
 .field-label {
   font-size: var(--fs-12);
   font-weight: 600;

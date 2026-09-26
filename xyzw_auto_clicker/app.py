@@ -16,7 +16,7 @@ from fastapi.staticfiles import StaticFiles
 from fastapi.templating import Jinja2Templates
 from pydantic import BaseModel, Field, field_validator, model_validator
 
-from .adb import AdbClient
+from .adb import AdbClient, AdbError
 from .logging_setup import configure as _configure_logging
 from .logging_setup import env_json_enabled
 from .matcher import ImageMatcher
@@ -65,6 +65,8 @@ async def _lifespan(app: FastAPI):
     # 模板名修复与默认方案生成涉及磁盘 IO，放到线程里跑，避免拖慢事件循环首帧。
     await asyncio.to_thread(repair_template_names)
     await asyncio.to_thread(ensure_default_plan)
+    # PR-27：启动时自动重连持久化的远程设备（失败不阻塞，web 仍可用）
+    await adb.reconnect_all()
     try:
         yield
     finally:
@@ -152,9 +154,45 @@ async def index(request: Request) -> HTMLResponse:
 async def list_devices() -> dict[str, object]:
     try:
         devices = await adb.devices()
-        return {"devices": [device.__dict__ for device in devices]}
+        return {
+            "devices": [device.__dict__ for device in devices],
+            "remotes": adb.remote_status(),
+        }
     except Exception as exc:
         raise HTTPException(status_code=500, detail=str(exc)) from exc
+
+
+class RemoteDeviceRequest(BaseModel):
+    host: str = Field(min_length=1, max_length=255)
+
+    @field_validator("host")
+    @classmethod
+    def _validate_host(cls, value: str) -> str:
+        # host[:port]：host 仅字母数字 . -（不得连续点/首尾点），port 仅数字；
+        # 防 shell 元字符注入
+        if ":" not in value or value.count(":") > 1:
+            raise ValueError("远程设备地址应为 host:port")
+        h, _, p = value.partition(":")
+        if not re.fullmatch(r"[A-Za-z0-9]([A-Za-z0-9.-]*[A-Za-z0-9])?", h) or ".." in h:
+            raise ValueError("host 仅允许字母数字与 . -")
+        if not re.fullmatch(r"\d{1,5}", p) or not 0 < int(p) <= 65535:
+            raise ValueError("port 应为 1-65535")
+        return value
+
+
+@app.post("/api/devices/connect")
+async def connect_device(payload: RemoteDeviceRequest) -> dict[str, object]:
+    try:
+        ok = await adb.connect(payload.host)
+        return {"ok": ok, "host": payload.host, "remotes": adb.remote_status()}
+    except AdbError as exc:
+        raise HTTPException(status_code=400, detail=str(exc)) from exc
+
+
+@app.post("/api/devices/disconnect")
+async def disconnect_device(payload: RemoteDeviceRequest) -> dict[str, object]:
+    ok = await adb.disconnect(payload.host)
+    return {"ok": ok, "host": payload.host, "remotes": adb.remote_status()}
 
 
 @app.post("/api/screenshot")

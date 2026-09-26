@@ -32,6 +32,12 @@ class _StubAdb:
     async def screenshot_png(self, device_id=None):
         return b""
 
+    async def reconnect_all(self):
+        return None
+
+    def remote_status(self):
+        return {}
+
 
 @pytest.fixture
 def metrics_client(tmp_path, monkeypatch):

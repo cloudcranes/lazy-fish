@@ -1,14 +1,18 @@
 from __future__ import annotations
 
 import asyncio
+import json
+import re
 import subprocess
 import time
 from collections import OrderedDict
 from dataclasses import dataclass
+from pathlib import Path
 from typing import IO
 
 _POOL_MAX_SIZE = 5
 _POOL_IDLE_SECONDS = 60.0
+_REMOTE_FILE = "data/devices.json"
 
 
 @dataclass(frozen=True)
@@ -109,11 +113,21 @@ class _ProcPool:
 
 
 class AdbClient:
-    def __init__(self, adb_path: str = "adb", timeout_seconds: float = 10) -> None:
+    def __init__(
+        self,
+        adb_path: str = "adb",
+        timeout_seconds: float = 10,
+        *,
+        remote_file: str | Path | None = None,
+    ) -> None:
         self.adb_path = adb_path
         self.timeout_seconds = timeout_seconds
         self._device_args_cache: dict[str | None, list[str]] = {None: []}
         self._pool = _ProcPool()
+        # PR-27：远程设备注册表，data/devices.json 持久化，进程重启后自动 reconnect。
+        self._remote_file = Path(remote_file) if remote_file else Path(_REMOTE_FILE)
+        self._remotes: dict[str, bool] = {}  # host:port -> 上次 connect 结果
+        self._load_remotes()
 
     async def _run(self, args: list[str], *, input_bytes: bytes | None = None) -> bytes:
         def call() -> bytes:
@@ -169,6 +183,81 @@ class AdbClient:
             if len(parts) >= 2:
                 devices.append(Device(id=parts[0], status=parts[1]))
         return devices
+
+    # ------------------------------------------------------------------
+    # PR-27：远程设备管理（adb connect / disconnect + 持久化注册表）
+    # ------------------------------------------------------------------
+
+    def _load_remotes(self) -> None:
+        try:
+            raw = self._remote_file.read_text(encoding="utf-8")
+            data = json.loads(raw)
+            self._remotes = {host: bool(ok) for host, ok in data.items()}
+        except (OSError, ValueError, TypeError):
+            self._remotes = {}
+
+    def _save_remotes(self) -> None:
+        try:
+            self._remote_file.parent.mkdir(parents=True, exist_ok=True)
+            self._remote_file.write_text(
+                json.dumps(self._remotes, indent=2, sort_keys=True) + "\n",
+                encoding="utf-8",
+            )
+        except OSError:
+            # 持久化失败不致命：内存态仍可用，下次运行再试
+            pass
+
+    def _valid_remote(self, host: str) -> bool:
+        # host[:port]，host 仅允许字母数字 . - ，且不得连续点/首尾点；port 仅数字
+        if ":" not in host or host.count(":") > 1:
+            return False
+        h, _, p = host.partition(":")
+        return bool(
+            re.fullmatch(r"[A-Za-z0-9]([A-Za-z0-9.-]*[A-Za-z0-9])?", h)
+            and ".." not in h
+            and re.fullmatch(r"\d{1,5}", p)
+            and 0 < int(p) <= 65535
+        )
+
+    async def connect(self, host: str) -> bool:
+        """adb connect host:port；成功则写入持久化注册表。"""
+        if not self._valid_remote(host):
+            raise AdbError("远程设备地址非法，应为 host:port", code="FAILED")
+        try:
+            output = (await self._run(["connect", host])).decode("utf-8", errors="replace")
+        except AdbError:
+            self._remotes[host] = False
+            self._save_remotes()
+            raise
+        ok = "connected" in output or "already connected" in output
+        self._remotes[host] = ok
+        self._save_remotes()
+        return ok
+
+    async def disconnect(self, host: str) -> bool:
+        """adb disconnect host:port 并从注册表移除（不删除注册表中的失败记录语义）。"""
+        try:
+            await self._run(["disconnect", host])
+            ok = True
+        except AdbError:
+            ok = False
+        self._remotes.pop(host, None)
+        self._save_remotes()
+        return ok
+
+    async def reconnect_all(self) -> None:
+        """启动时逐个尝试连接已注册的远程设备，失败不阻塞。"""
+        for host in list(self._remotes):
+            try:
+                await self.connect(host)
+            except AdbError:
+                continue
+
+    def remote_hosts(self) -> list[str]:
+        return sorted(self._remotes)
+
+    def remote_status(self) -> dict[str, bool]:
+        return dict(self._remotes)
 
     async def screenshot_png(self, device_id: str | None = None) -> bytes:
         return await self._run([*self._device_args(device_id), "exec-out", "screencap", "-p"])
