@@ -306,7 +306,7 @@ def test_metrics_endpoint_returns_required_fields(tmp_path: Path, monkeypatch: p
     app_module.runner.state.status = "running"
 
     with TestClient(app_module.app) as client:
-        r = client.get("/api/metrics")
+        r = client.get("/api/metrics", headers={"Accept": "application/json"})
         assert r.status_code == 200
         body = r.json()
         # 字段顺序按契约：内存、状态、截图时间、运行时长、累计启动
@@ -332,7 +332,7 @@ def test_metrics_endpoint_handles_missing_proc(tmp_path: Path, monkeypatch: pyte
 
     monkeypatch.setattr("builtins.open", _raise)
     with TestClient(app_module.app) as client:
-        r = client.get("/api/metrics")
+        r = client.get("/api/metrics", headers={"Accept": "application/json"})
         assert r.status_code == 200
         assert r.json()["process_resident_memory_bytes"] == 0
 

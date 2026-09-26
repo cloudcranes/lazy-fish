@@ -10,7 +10,7 @@ from contextlib import asynccontextmanager
 from pathlib import Path
 
 from fastapi import FastAPI, HTTPException, Request
-from fastapi.responses import FileResponse, HTMLResponse, Response
+from fastapi.responses import FileResponse, HTMLResponse, PlainTextResponse, Response
 from fastapi.staticfiles import StaticFiles
 from fastapi.templating import Jinja2Templates
 from pydantic import BaseModel, Field, field_validator, model_validator
@@ -266,15 +266,48 @@ async def health() -> dict[str, object]:
 
 
 @app.get("/api/metrics")
-async def metrics() -> Response:
+async def metrics(request: Request) -> Response:
     """运行时指标：仅 LOG_JSON=1 启用（容器化部署默认关闭，开发期手动开）。
 
     ponytail: 与 logging_setup.env_json_enabled 走同一套开关，确保「结构化日志 + 指标端点」
     同步启用——避免生产环境无意中暴露进程内存 / 任务计数等敏感指标。
+    Accept 头协商：Accept 含 application/json 走 JSON；含 text/plain 或 */* 走
+    Prometheus text/plain; version=0.0.4；默认 JSON。
     字段顺序稳定，便于 Prometheus / VictoriaMetrics 文本解析。
     """
     if not _metrics_enabled():
         return Response(status_code=404)
+    snapshot = _collect_metrics_snapshot()
+    if _wants_prometheus(request.headers.get("accept")):
+        body = _render_prometheus(snapshot)
+        return PlainTextResponse(
+            content=body,
+            media_type="text/plain; version=0.0.4; charset=utf-8",
+        )
+    return Response(
+        content=json.dumps(snapshot, ensure_ascii=False, sort_keys=False),
+        media_type="application/json",
+    )
+
+
+def _wants_prometheus(accept_header: str | None) -> bool:
+    """Accept 头协商：application/json 优先；否则 text/plain 或 */* 走 Prometheus。
+
+    ponytail: 兼容 cURL / wget 默认 Accept=*/*，但拒绝把 application/json 误判成文本——
+    显式 application/json 走 JSON，含 text/plain 才走 Prometheus。
+    """
+    if not accept_header:
+        return False
+    types = [item.strip().split(";", 1)[0].lower() for item in accept_header.split(",")]
+    has_json = any(t == "application/json" for t in types)
+    has_text_plain = any(t == "text/plain" for t in types)
+    has_wildcard = any(t == "*/*" for t in types)
+    if has_json and not has_text_plain:
+        return False
+    return has_text_plain or has_wildcard
+
+
+def _collect_metrics_snapshot() -> dict[str, object]:
     path = runner.state.last_screenshot
     last_screenshot_mtime: float | None = None
     if path is not None:
@@ -282,17 +315,40 @@ async def metrics() -> Response:
             last_screenshot_mtime = path.stat().st_mtime
         except OSError:
             last_screenshot_mtime = None
-    body = {
+    return {
         "process_resident_memory_bytes": _process_resident_memory_bytes(),
         "runner_status": runner.state.status,
         "last_screenshot_mtime": last_screenshot_mtime,
         "uptime_seconds": round(time.monotonic() - _APP_START_TIME, 3),
         "tasks_started_total": runner.tasks_started_total,
     }
-    return Response(
-        content=json.dumps(body, ensure_ascii=False, sort_keys=False),
-        media_type="application/json",
-    )
+
+
+def _render_prometheus(snapshot: dict[str, object]) -> str:
+    """按 Prometheus text/plain; version=0.0.4 文本格式渲染指标。
+
+    ponytail: 字符串里出现的 \\ 与 \\n 是 Prometheus 转义规则；这里只输出整数 / 浮点 /
+    受控枚举，不带引号字符串，省去转义。
+    """
+    lines: list[str] = [
+        "# HELP lazy_fish_uptime_seconds 进程启动到现在的秒数（容器视角存活时间）。",
+        "# TYPE lazy_fish_uptime_seconds gauge",
+        f"lazy_fish_uptime_seconds {snapshot['uptime_seconds']}",
+        "# HELP lazy_fish_process_resident_memory_bytes 进程 RSS 字节数；非 Linux 降级返回 0。",
+        "# TYPE lazy_fish_process_resident_memory_bytes gauge",
+        f"lazy_fish_process_resident_memory_bytes {snapshot['process_resident_memory_bytes']}",
+        "# HELP lazy_fish_runner_status Runner 当前状态：idle/starting/running/paused/stopped/done/error。",
+        "# TYPE lazy_fish_runner_status gauge",
+        f"lazy_fish_runner_status {snapshot['runner_status']}",
+        "# HELP lazy_fish_last_screenshot_mtime_seconds 最近一次截图 mtime；未截图时 0。",
+        "# TYPE lazy_fish_last_screenshot_mtime_seconds gauge",
+        f"lazy_fish_last_screenshot_mtime_seconds {snapshot['last_screenshot_mtime'] if snapshot['last_screenshot_mtime'] is not None else 0}",
+        "# HELP lazy_fish_tasks_started_total 累计启动的任务次数。",
+        "# TYPE lazy_fish_tasks_started_total counter",
+        f"lazy_fish_tasks_started_total {snapshot['tasks_started_total']}",
+        "",
+    ]
+    return "\n".join(lines)
 
 
 def _metrics_enabled() -> bool:
