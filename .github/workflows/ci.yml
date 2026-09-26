@@ -200,3 +200,58 @@ jobs:
       - name: Teardown container
         if: always()
         run: docker stop lazy-fish-a11y || true
+
+  visual:
+    name: 视觉回归（playwright 截图 + pixelmatch）
+    runs-on: ubuntu-latest
+    needs: docker-up
+    timeout-minutes: 15
+    # 与 a11y job 同策略：PR 上 warn（baseline 漂移可能在多平台字体差异下刷出少量噪声），
+    # main 上 fail-fast —— baseline 变动必须走 PR + 人工审 diff 图，禁直推 main 重生成。
+    continue-on-error: ${{ github.event_name == 'pull_request' }}
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Set up Node
+        uses: actions/setup-node@v4
+        with:
+          node-version: "20"
+          cache: npm
+
+      - name: Install UI test deps
+        # 仓根 package.json 已声明 pixelmatch / pngjs / fs-extra（@axe-core / playwright 沿用），
+        # workspaces 自动把依赖下发到 tests/ui/node_modules。
+        run: npm ci --no-audit --no-fund
+
+      - name: Install Playwright browsers
+        run: npx playwright install --with-deps chromium
+
+      - name: Wait for lazy-fish
+        run: |
+          for i in $(seq 1 20); do
+            if curl -fsS http://127.0.0.1:8999/api/health -o /dev/null; then
+              echo "lazy-fish is up"
+              exit 0
+            fi
+            sleep 2
+          done
+          echo "lazy-fish not reachable on 8999"
+          exit 1
+
+      - name: Run visual regression over 5 views
+        # baseline 缺失 = 首次初始化，会写 PNG 并视为通过；
+        # 已有 baseline = 按 0.1% 阈值比对。
+        # 阈值与更新流程见 docs/UI-DESIGN.md §12。
+        run: node tests/ui/visual.mjs
+
+      - name: Upload diff artifacts on failure
+        if: failure()
+        uses: actions/upload-artifact@v4
+        with:
+          name: visual-diffs
+          path: tests/ui/diffs/
+
+      - name: Teardown container
+        if: always()
+        run: docker stop lazy-fish-a11y || true

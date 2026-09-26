@@ -338,3 +338,57 @@ PR-10 把 axe-core 拉进 CI 作为质量护栏，PR-17 把它从「过渡期 wa
 §6 是「设计原则」（WCAG AA、对比度、键盘、屏幕阅读器），本节是「验证手段 + 合并门槛」。设计原则改了 → axe 规则自动跟上；axe 规则出了 serious/critical → 反过来逼 §6 落地，并且 PR 不再被允许通过。
 
 > **不需要单独跑 axe**：CI 已经把 a11y 跑在 `docker-up` 起的真容器上。本地想调试时：`docker compose up -d lazy-fish` → `npm ci && npx playwright install chromium` → `node tests/ui/a11y.mjs`。本地退出码与 CI 一致：`echo $?` 应是 `0` / `1` / `2` 之一。
+
+---
+
+## 十二、视觉回归（playwright 截图 + pixelmatch）
+
+§3 的设计令牌（颜色 / 字号 / 间距 / 圆角 / 阴影）改了，§4 的组件 CSS 跟着改，§6 的 a11y 验收随之失守 —— 但靠 a11y 检测不出来。CSS 层级抖动（垂直居中差 1px、字号变化、图标换位）axe-core 不会报，smoke.mjs 也不会断言"长成什么样"，结果就是 PR 合了之后用户看到"控制台按钮位置和昨天不一样"。
+
+PR-18 用 **pixelmatch** 在 CI 上把"长成什么样"锁住：
+
+### 12.1 依赖与驱动
+
+- **依赖**：`pixelmatch ^5.3.0` + `pngjs ^7.0.0` + `fs-extra ^11.2.0`（仅 devDep），声明在仓根 `package.json` 与 `tests/ui/package.json` 中，沿用 §11 的 `workspaces` 下发机制。生产镜像里没有这些（`.dockerignore` 显式排除 `tests/**/node_modules/`）。
+- **驱动脚本**：`tests/ui/visual.mjs` 用 Playwright 自带 Chromium 打开 `http://127.0.0.1:8999/`，按 `console / plans / templates / capture / logs` 顺序切换视图（同 §11 的视图枚举与 hash 时序，保证"视角一致"），1280×900 视口拍 5 张 PNG，与 `tests/ui/baselines/*.png` 用 `pixelmatch({ threshold: 0 })` 做像素比对。
+- **判失败标准**：差异像素占比 `> 0.1%`（即 `0.001`）即视为 CI 失败。`SIZE_MISMATCH`（baseline 与 actual 尺寸不同）直接视为 fail。**阈值不是"完美比对"，是"样式层实质变更"探测** —— 容忍极少量抖动（动画残留、状态点呼吸、字体子像素抗锯齿），挡得住真实改动（字号 / 间距 / 颜色变化必然 > 1%）。
+
+### 12.2 Baseline 生命周期
+
+- **首次初始化**：`tests/ui/baselines/*.png` 缺失会**生成** baseline 并视为通过 —— 让首次合入的 PR 不会因为"没基线"被自己卡住。后续 PR 必须带 baseline，否则会被本次合入 PR 的"生成"动作产出的 baseline 锁死。
+- **更新入口**：`node tests/ui/visual.mjs --update-baseline` 或 `npm run test:visual:update` 强制覆盖 5 张基线图。
+- **更新流程**（给维护者）：
+  1. 本地起容器：`docker compose up -d lazy-fish`
+  2. 装依赖：`npm ci && npx playwright install --with-deps chromium`
+  3. 确认改动是预期的（不是误改），跑：`npm run test:visual:update`
+  4. **逐图人工核对** `tests/ui/baselines/*.png` 与改动前的版本（git diff 不可视化 PNG，**必须用图像浏览器或 PR review 的 image diff**）—— 确认没有把"按钮错位"也写进 baseline
+  5. 提交 `tests/ui/baselines/*.png` 与样式改动一起进 PR；CI 在 PR 上 `continue-on-error`，但 `tests/ui/diffs/*.diff.png` 会作为 artifact 上传，reviewer 二次核对
+  6. 合并到 main 后 main 上 fail-fast，新 baseline 是合并门槛
+- **禁直推 main 重生成**：baseline 变动必须走 PR + 人工审 diff 图，避免误把"渲染异常"当"正常样式"固化下来。
+
+### 12.3 CI 编排
+
+- **Job**：`visual` job（`needs: docker-up`，复用 §11 的懒鱼容器；先 `npm ci` + `npx playwright install --with-deps chromium`，再 `node tests/ui/visual.mjs`）。
+- **PR vs main 策略**：PR 上 `continue-on-error: true`，main 上 fail-fast —— 与 §11 PR-10 引入期同策略：baseline 漂移可能在多平台字体差异下刷出少量噪声，给作者留"先合并、后修"的过渡期；axe 规则清理 / 字体稳定后，删掉 `continue-on-error` 即可升级为合并门槛（同 §11.3 的演进路径）。
+- **Diff 工件**：`if: failure()` 时把 `tests/ui/diffs/*.diff.png` 作为 artifact 上传（`actions/upload-artifact@v4`），reviewer 在 PR 上能直接看到差异像素位置。
+- **退出码语义**（与 §11 a11y 同约定）：
+  - `0`：5 视图全部 ≤ 阈值（含 baseline_created / baseline_updated）。
+  - `1`：有视图超阈值或尺寸不匹配。
+  - `2`：环境起不来（端口未通、`docker-up` 健康检查超时、`npm ci` / `npx playwright install` 失败等）。
+
+### 12.4 与 §11 的关系
+
+§11 是 a11y 质量护栏（axe-core 跑全部 DOM），§12 是视觉质量护栏（pixelmatch 跑 5 个视图快照）。一个看"对不对"，一个看"好不好看"；两者互不替代：
+
+- axe 全绿不代表布局没崩（按钮错位 2px 是合法合规的，但人眼会跳出来）
+- pixelmatch 全过不代表 aria 没漏（baseline 里的"已有错误"会被像素比对"正确地"接受）
+
+设计上：§3 令牌改了 → §12 baseline 必然要更新；§6 WCAG AA 改了 → §11 axe 规则跟上；§12 与 §11 任何一条失守都应触发 PR review 重审对方是否要随之调整。
+
+### 12.5 阈值选择的权衡
+
+- 调到 `0%`（精确比对）：被字体子像素抗锯齿差异、运行中状态环的微小呼吸直接打死 —— 全平台字体回退一致才有可能通过。
+- 调到 `1%`：把"按钮内边距错 2px"这种肉眼可见的变化漏掉。
+- `0.1%`（`0.001`）：是"人眼看不出差异，但 pixelmatch 能区分真改"的下限 —— 本仓库采用此值。
+
+> **不需要单独跑视觉回归**：CI 已经把 visual 跑在 `docker-up` 起的真容器上。本地想调试时：`docker compose up -d lazy-fish` → `npm ci && npx playwright install chromium` → `node tests/ui/visual.mjs`（baseline 缺失会自动生成）。想强制覆盖 baseline：`node tests/ui/visual.mjs --update-baseline` 或 `npm run test:visual:update`。
