@@ -33,6 +33,10 @@ from .plans import (
 from .runner import TaskRunner
 from .settings import BASE_DIR, SHOT_DIR, STOP_FILE, TEMPLATE_DIR, repair_template_names
 from .tasks.chest import build_chest_config
+from .tracing_setup import load_tracer, shutdown_tracer
+
+# PR-21 OTel：进程级 tracer 单例，OTEL_SDK_DISABLED=true 时为 NoOp。
+_tracer = load_tracer("lazy-fish")
 
 # 模块顶层 logger（PR-3 可观测性：所有跨模块日志统一从这里出）
 logger = logging.getLogger(__name__)
@@ -50,15 +54,42 @@ runner = TaskRunner(adb, matcher)
 
 @asynccontextmanager
 async def _lifespan(app: FastAPI):
+    # PR-21 OTel：startup hook 触发 SDK 初始化（OTEL_SDK_DISABLED=true → NoOp）；
+    # 放在 lifespan 而不是模块顶部，匹配「依赖 FastAPI app 上下文」的语义。
+    load_tracer("lazy-fish")
     # 模板名修复与默认方案生成涉及磁盘 IO，放到线程里跑，避免拖慢事件循环首帧。
     await asyncio.to_thread(repair_template_names)
     await asyncio.to_thread(ensure_default_plan)
-    yield
+    try:
+        yield
+    finally:
+        # shutdown 强制 flush，避免 uvicorn 优雅退出时丢掉缓冲里最后几秒的 span
+        shutdown_tracer()
 
 
 app = FastAPI(title="咸鱼之王自动点击器", lifespan=_lifespan)
 templates = Jinja2Templates(directory=str(BASE_DIR / "templates"))
 app.mount("/static", StaticFiles(directory=str(BASE_DIR / "static")), name="static")
+
+
+@app.middleware("http")
+async def _ot_http_span_middleware(request: Request, call_next):
+    """PR-21 OTel：为每个 HTTP 请求建一条 span。
+
+    ponytail: 用 FastAPI 中间件而不是 FastAPIInstrumentor，
+    省掉 contrib 包里 asgi/instrumentation 的额外 import 与 urllib/opencensus 子依赖；
+    后续若需 traceparent header 透传与跨进程 trace_id，在此处加 propagator.inject / extract 即可。
+    """
+    with _tracer.start_as_current_span(
+        f"http {request.method} {request.url.path}",
+        attributes={
+            "http.method": request.method,
+            "http.route": request.url.path,
+        },
+    ) as span:
+        response = await call_next(request)
+        span.set_attribute("http.status_code", response.status_code)
+        return response
 
 
 class CropRequest(BaseModel):

@@ -9,7 +9,13 @@ from pathlib import Path
 import cv2
 import numpy as np
 
+from .tracing_setup import load_tracer
+
 logger = logging.getLogger(__name__)
+
+# PR-21 OTel：matcher 子 span 与 runner 主循环共享同一条 tracer，
+# 通过 OTel context 自动成为 runner.iter 的子节点。
+_tracer = load_tracer("lazy-fish")
 
 # 多尺度参数默认值，依据 docs/RECOGNITION-RESEARCH.md 的实测标定。
 # 同一个按钮在游戏里会以 395 / 438 / 487 px 三种宽度渲染（相差约 ±11%），
@@ -188,6 +194,25 @@ class ImageMatcher:
         template_names: list[str],
         threshold: float,
         profile: MatchProfile | None = None,
+    ) -> MatchResult | None:
+        # PR-21 OTel:span 上记录 template_count（模板候选数）与 hit_template_name（命中名），
+        # 后续 trace 检索能直接看到「这次循环试了 N 个模板、命中了哪个」；
+        # 未命中时 hit_template_name 留空，区分「真没匹配」与「命中但模板不在列表」。
+        with _tracer.start_as_current_span(
+            "matcher.match",
+            attributes={"template_count": len(template_names)},
+        ) as span:
+            result = self._match_impl(screenshot_png, template_names, threshold, profile)
+            if result is not None:
+                span.set_attribute("hit_template_name", result.template_name)
+            return result
+
+    def _match_impl(
+        self,
+        screenshot_png: bytes,
+        template_names: list[str],
+        threshold: float,
+        profile: MatchProfile | None,
     ) -> MatchResult | None:
         profile = profile or MatchProfile()
         screenshot = self._decode(screenshot_png)

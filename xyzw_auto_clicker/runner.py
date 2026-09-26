@@ -13,6 +13,11 @@ from .adb import AdbClient
 from .matcher import ImageMatcher, frame_delta, frame_fingerprint
 from .models import TaskConfig
 from .settings import SHOT_DIR, STOP_FILE, TEMPLATE_DIR  # noqa: F401
+from .tracing_setup import load_tracer
+
+# PR-21 OTel：runner 主循环与 ADB / matcher 子操作都走这条 tracer，
+# 跟 app 的 http 中间件同源 → 一条请求触发的整链路都在同一 trace 下。
+_tracer = load_tracer("lazy-fish")
 
 
 @dataclass
@@ -102,18 +107,23 @@ class TaskRunner:
                     state.status = "stopped"
                     self._log("收到停止信号")
                     return
-                screenshot, dropped = await self._capture_stable_frame(config)
-                if dropped:
-                    self._log(f"画面未静止，丢弃 {dropped} 帧后取用")
-                # 落盘后只把路径留给 API/前端，避免状态对象长期持有大字节数组
-                state.last_screenshot = self._write_latest_screenshot(screenshot)
-                click_index = state.clicked
-                template_names = (
-                    config.first_template_names
-                    if (click_index == 0 and config.first_template_names)
-                    else config.template_names
-                )
-                match = self.matcher.match(screenshot, template_names, threshold, profile)
+                # PR-21 OTel：每轮主循环开一条 'runner.iter' span，
+                # 截图 / 匹配 / 点击作为子 span 自动挂在同一 trace 上。
+                with _tracer.start_as_current_span("runner.iter"):
+                    with _tracer.start_as_current_span("adb.screenshot") as shot_span:
+                        screenshot, dropped = await self._capture_stable_frame(config)
+                        shot_span.set_attribute("adb.dropped_frames", dropped)
+                    if dropped:
+                        self._log(f"画面未静止，丢弃 {dropped} 帧后取用")
+                    # 落盘后只把路径留给 API/前端，避免状态对象长期持有大字节数组
+                    state.last_screenshot = self._write_latest_screenshot(screenshot)
+                    click_index = state.clicked
+                    template_names = (
+                        config.first_template_names
+                        if (click_index == 0 and config.first_template_names)
+                        else config.template_names
+                    )
+                    match = self.matcher.match(screenshot, template_names, threshold, profile)
                 if match is None:
                     state.misses += 1
                     self._log(f"未匹配到模板，连续失败 {state.misses}/{max_misses}")
@@ -131,10 +141,12 @@ class TaskRunner:
                     if (click_index == 0 and config.first_template_names)
                     else config.repeat_tap_count
                 )
-                for tap_index in range(tap_count):
-                    await adb.tap(x, y, device_id)
-                    if tap_index + 1 < tap_count:
-                        await asyncio.sleep(config.repeat_tap_gap_seconds)
+                with _tracer.start_as_current_span("adb.tap") as tap_span:
+                    tap_span.set_attribute("adb.tap_count", tap_count)
+                    for tap_index in range(tap_count):
+                        await adb.tap(x, y, device_id)
+                        if tap_index + 1 < tap_count:
+                            await asyncio.sleep(config.repeat_tap_gap_seconds)
                 state.clicked += 1
                 state.misses = 0
                 state.last_match = {
