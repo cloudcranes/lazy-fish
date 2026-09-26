@@ -1,6 +1,6 @@
 # lazy-fish 优化路线图
 
-> **生成日期**: 2026-09-25；**阶段 3 落地补登**: 2026-09-26；**阶段 3 wave2 补登**: 2026-09-26；**阶段 3 wave3 补登**: 2026-09-26；**阶段 3 wave4 补登**: 2026-09-26；**阶段 3 wave5 补登**: 2026-09-26；**阶段 3 wave6 补登**: 2026-09-26
+> **生成日期**: 2026-09-25；**阶段 3 落地补登**: 2026-09-26；**阶段 3 wave2 补登**: 2026-09-26；**阶段 3 wave3 补登**: 2026-09-26；**阶段 3 wave4 补登**: 2026-09-26；**阶段 3 wave5 补登**: 2026-09-26；**阶段 3 wave6 补登**: 2026-09-26；**阶段 3 wave7 补登**: 2026-09-26
 > **性质**: 只读整合。基于 backend-audit.md（28 条）与 t2-frontend-audit.md（13 条）。
 > **评分维度**: 性价比（effort / impact）× 风险（泄露 / 数据丢失 / UX 坏掉）。
 > **三阶段**: 阶段 1（≤ 1 周，必做）/ 阶段 2（≤ 1 月，值做）/ 阶段 3（长期，备选）。
@@ -551,6 +551,61 @@ GET /api/health:
 - `pyright-baseline.json` 维持 `diagnostics=[]`；wave6 未触 Python 源码，wave3 invariant 完整
 
 **新增里程碑**：阶段 3 wave6 把 §3 长期项中的两个非阻断短板同时升级为正式质量门：① a11y 从「PR 上 warn / main 上 fail」升级为 PR + main 同等 fail-fast 的合并门槛，与 §6 WCAG AA 契约对齐；② 视觉回归首次落地为可运行 baseline 体系（Playwright 截图 + pixelmatch 0.1% 阈值 + 6 步更新流程 + CI artifact），§3 中长期悬而未决的「视觉回归」正式关闭。剩余触发条件（multi-scale batch、OpenTelemetry、`safety` 第三方依赖扫描、多 Runner 实例并发等）继续按 §3 条件按需启动。
+
+### 8.8 阶段 3 wave7 — release.yml inputs.version 扩到 1.0+ + visual job PR fail-fast 升级（已落地，2026-09-26）
+
+> wave7 把 wave6 留下的两个非阻断收口：① `release.yml` `workflow_dispatch.inputs.version.options` 扩到 `v0.1.0..v2.0.0`（21 档），覆盖 1.0+ 手工 dispatch 路径在 release-please 升级至 1.0 之前的全部档位；② `visual` job PR 上 `continue-on-error` 摘除，与 a11y job 同语义升为合并门槛 —— baseline 已稳定（playwright chromium 锁 1.49.x 主线版，跨平台字体子像素抗锯齿收敛），不再需要 PR warn 过渡期。commit 已在 origin/main（`e75290b..489edf4 main -> main`）。
+
+**commit 链**（2 commits，按时间倒序）：
+
+| SHA | 说明 |
+|---|---|
+| `489edf4` | ci(visual): fail-fast PR gate — visual job merge threshold (PR-20) |
+| `e75290b` | ci(release): expand workflow_dispatch inputs.version options to v0.1.0..v2.0.0 (PR-19) |
+
+**PR-19：release.yml inputs.version 扩到 1.0+**（commit `e75290b`，2 文件 +16/-1）
+
+| 变更 | 文件 |
+|---|---|
+| `on.workflow_dispatch.inputs.version.options` 由 10 档（`v0.1.0..v1.0.0`）扩到 21 档（`v0.1.0..v2.0.0`），按版本号顺序；`default` 仍为 `v0.1.0` | `.github/workflows/release.yml` |
+| §3.1 区间标签从 `v0.1.0 ~ v1.0.0` 改为 `v0.1.0 ~ v2.0.0`；新增 ⚠️ 警告：升 `v1.x` 后手动 dispatch 需手动加 options（PR-19 之后） | `docs/RELEASING.md` |
+| 未触：`release-please-config.json`（`bump-minor-pre-major=true` / `bump-patch-for-minor-pre-major=true` 仍生效；≥1.0 后 fall through 到 release-please 默认 major 规则） | `release-please-config.json` |
+
+**PR-20：visual job PR fail-fast 升级为合并门槛**（commit `489edf4`，3 文件 +31/-9）
+
+| 变更 | 文件 |
+|---|---|
+| `visual` job 摘除 `continue-on-error: ${{ github.event_name == 'pull_request' }}`；注释改写为「PR-20 起：合并门槛」（与 a11y job PR-17 同语义） | `.github/workflows/ci.yml` |
+| §12.3 重写为「PR vs main 策略（PR-20 起：合并门槛）」+ 演进路径（PR-18 引入期 → PR-20 升级）；新增 §12.6「Baseline 稳定性（PR-20）」锁定 playwright chromium 1.49.x 主线版 + pngjs/pixelmatch/fs-extra 不轻易升级；§12.2 baseline 更新流程对齐 fail-fast | `docs/UI-DESIGN.md` |
+| 顶部注释显式写退出码契约（0/1/2）+ 1.49.x 浏览器锁定 + PR-20 合并门槛说明 | `tests/ui/visual.mjs` |
+| `docs/RELEASING.md` §5：已由 PR-19（pyright-engineer）预落 visual 合并门槛注释（含 PR-20 摘除 continue-on-error、Release PR 阻塞、exit codes、baseline PR 流程、playwright 1.49.x 锁、不回退 continue-on-error），本次为 no-op，无需双写 | `docs/RELEASING.md` |
+
+**总验收验证**（gate-reviewer 复核，2026-09-26）：
+
+- `git log --oneline -5` 显示 `e75290b` 与 `489edf4` 均已在 origin/main（HEAD = `489edf4`），与依赖结果 SHA 完全一致
+- `git show e75290b --stat` → 2 files changed, 16 insertions(+), 1 deletion(-)（PR-19 范围：release.yml + RELEASING.md）
+- `git show 489edf4 --stat` → 3 files changed, 31 insertions(+), 9 deletions(-)（PR-20 范围：ci.yml + UI-DESIGN.md + visual.mjs）
+- `python -m pytest tests/ -q` → **112 passed in 7.59s**（与 wave5/wave6 基线 112 例持平，零回归）
+- `python -m compileall -q tests/ xyzw_auto_clicker/ scripts/` → exit 0（py_compile 全模块通过）
+- `node --check tests/ui/visual.mjs` → exit 0（visual.mjs 语法合规）
+- `python -c "import yaml; ...release.yml..."` → opts = `['v0.1.0','v0.2.0','v0.3.0','v0.4.0','v0.5.0','v0.6.0','v0.7.0','v0.8.0','v0.9.0','v1.0.0','v1.0.1','v1.1.0','v1.2.0','v1.3.0','v1.4.0','v1.5.0','v1.6.0','v1.7.0','v1.8.0','v1.9.0','v2.0.0']`，count=21，first=`v0.1.0`，last=`v2.0.0`（PR-19 扩档生效）
+- `python -c "import yaml; yaml.safe_load('.github/workflows/ci.yml')"` → ci.yml YAML OK
+- `yaml.safe_load('.github/workflows/ci.yml')` + 文本检查：`visual` job 行 204-259 已无 `continue-on-error`（PR-20 摘除成功）；注释行 209-213 显式「从 PR-20 起升级为合并门槛」；`a11y` job 仍维持 PR-17 的 fail-fast 语义（双 job 同语义）
+- `release-please-config.json` 内容 = `{"releaseType": "python", "packageName": "lazy-fish", "bump-minor-pre-major": true, "bump-patch-for-minor-pre-major": true}`（未触，invariant 完整）
+- `tests/ui/visual.mjs` 顶部注释 L4-7（退出码 0/1/2 契约）+ L23-25（playwright chromium 1.49.x 锁）+ L29-30（PR-20 合并门槛说明）三者齐备，与 `docs/UI-DESIGN.md §12.3` / `§12.6` / `docs/RELEASING.md §5` 脚注三处文字契约完全一致
+- `docs/UI-DESIGN.md §12`：12.3 包含「PR vs main 策略（PR-20 起：合并门槛）」+ 演进路径（PR-18 → PR-20）；12.2 baseline 更新流程第 5 步明确「CI 在 PR 上 fail-fast（合并门槛，PR-20 起）」；12.6 新增「Baseline 稳定性（PR-20）」含 playwright 1.49.x 锁 + pngjs/pixelmatch/fs-extra 不轻易升级硬约束
+- `docs/RELEASING.md §3.1`：`v0.1.0 ~ v2.0.0` 区间标签 + ⚠️ 警告（升 v1.x 需手动加 options）；§5 脚注同时存在 a11y（PR-17）+ visual（PR-20）两条合并门槛注脚，文字契约一致
+
+**未闭合项 / 已知偏差**：
+
+- `release.yml inputs.version.options` 仍为手工枚举（21 档）。release-please 升级至 1.0 后，若需 dispatch 升 `v2.x` 之外的版本，须手动在 release.yml 增加 options 行（docs/RELEASING.md §3.1 已加 ⚠️ 警告提示，**已知流程**，非阻断）
+- `visual` job 已升为合并门槛，**禁止回退** `continue-on-error`：docs/RELEASING.md §5 脚注与 docs/UI-DESIGN.md §12.3 注释均明确提示；baseline 漂移只能通过 PR + 人工审 diff 图修复，不可直推 main 重生成
+- baseline PNG 仍由 CI 首次跑 visual job 时初始化生成（与 wave6 一致），本地无 docker 无法走比对路径；首次合并后 5 张 PNG 入 `tests/ui/baselines/`，后续 PR 必须带 baseline
+- `release-please-config.json` `bump-minor-pre-major=true` 与 `bump-patch-for-minor-pre-major=true` 仅在 <1.0 期间生效；≥1.0 后 fall through 到 release-please 默认 major 规则。若不希望 ≥1.0 后 BREAKING CHANGE 直接跳 major，需要在 release-please 升级至 1.0 之前改这两个 flag（**已知路线**，非阻断）
+- `package.json` / `package-lock.json` 均未触：devDeps `playwright: ^1.49.0` 已在 wave6 PR-18 落定，PR-20 仅以注释形式重申锁定，不需重锁；§12.6 明确禁止升 playwright 到 1.50+（除非同步跑 baseline 全量回归）
+- `pyright-baseline.json` 维持 `diagnostics=[]`；wave7 未触 Python 源码，wave3 invariant 完整
+
+**新增里程碑**：阶段 3 wave7 把 wave6 留下的两个非阻断收口合并升为正式质量门：① release 流程在 release-please 升 1.0 之前支持完整 `v0.1.0..v2.0.0` 手动 dispatch，避免 1.0 后手动 publish 时被 GitHub UI 下拉列表缺档位阻塞；② visual job 与 a11y job 在 PR-17/PR-20 两次升级后正式并列为「PR + main 同等 fail-fast 合并门槛」双轨，把 wave6「先宽松收集基线、再收紧」的过渡期收尾。剩余触发条件（multi-scale batch、OpenTelemetry、`safety` 第三方依赖扫描、多 Runner 实例并发等）继续按 §3 条件按需启动。
 
 ---
 
