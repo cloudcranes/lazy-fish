@@ -40,6 +40,16 @@ htmlcov/
 # Docker / compose
 *.pid
 
+# Node
+node_modules/
+
+# AgentTeams 本地运行数据（不属仓库）
+.agent-teams/
+
+# 本地探测产物
+pyright-err.txt
+pyright-out.json
+
 # Large media
 *.mp4
 *.avi
