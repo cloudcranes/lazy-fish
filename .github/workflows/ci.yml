@@ -86,6 +86,9 @@ jobs:
           fi
         continue-on-error: false
 
+  # 说明：a11y / visual 与 docker 是独立 job（独立 runner），无法共享 localhost 端口，
+  # 所以每个需要容器的 job 自己 build + run（见 a11y / visual 内的 Build & Run 步骤）。
+  # docker job 只保留 build + smoke 自检。
   docker:
     runs-on: ubuntu-latest
     needs: test
@@ -118,50 +121,14 @@ jobs:
             || { docker logs lazy-fish-ci; exit 1; }
           docker stop lazy-fish-ci
 
-  # 把镜像"长期"起成服务，给 a11y 任务直接连 http://127.0.0.1:8999/；
-  # 与 docker 任务的差异：docker 只做 build+smoke，这里要对外提供端口。
-  docker-up:
-    runs-on: ubuntu-latest
-    needs: test
-    steps:
-      - uses: actions/checkout@v4
-
-      - name: Set up Buildx
-        uses: docker/setup-buildx-action@v3
-
-      - name: Build image
-        uses: docker/build-push-action@v6
-        with:
-          context: .
-          push: false
-          load: true
-          tags: lazy-fish:a11y
-          cache-from: |
-            type=gha,scope=${{ github.event.pull_request.number || 'main' }}
-            type=gha,scope=main
-          cache-to: |
-            type=gha,scope=${{ github.event.pull_request.number || 'main' }},mode=max
-
-      - name: Run container (long-lived for a11y)
-        run: |
-          # 不用 --rm：容器异常退出时保留现场，docker logs 才能拿到崩溃原因
-          docker run -d --name lazy-fish-a11y -p 8999:8999 lazy-fish:a11y
-          # 等 healthcheck 通过：直接拉一次 /api/health，最多重试 10 次
-          for i in $(seq 1 10); do
-            if curl -fsS http://127.0.0.1:8999/api/health -o /dev/null; then
-              echo "lazy-fish ready on 8999"
-              exit 0
-            fi
-            sleep 3
-          done
-          echo "lazy-fish never became ready"
-          docker logs lazy-fish-a11y || true
-          exit 1
+  # 说明：容器实例无法跨 job 共享（独立 runner 无共享 localhost），
+  # 需要应用的 job（a11y / visual）各自 build + run（见各 job 内 Build & Run）。
+  # 本 job 不再存在 —— docker job 已承担 build + smoke 自检。
 
   a11y:
     name: axe-core 自动 a11y
     runs-on: ubuntu-latest
-    needs: docker-up
+    needs: test
     timeout-minutes: 15
     # 从 PR-17 起升级为合并门槛：PR + main 都 fail-fast。
     # 之前的 `continue-on-error: ${{ github.event_name == 'pull_request' }}` 是 PR-10
@@ -186,6 +153,11 @@ jobs:
       - name: Install Playwright browsers
         run: npx playwright install --with-deps chromium
 
+      - name: Build & run lazy-fish container
+        run: |
+          docker build -t lazy-fish:a11y .
+          docker run -d --name lazy-fish-a11y -p 8999:8999 lazy-fish:a11y
+
       - name: Wait for lazy-fish
         run: |
           for i in $(seq 1 20); do
@@ -196,6 +168,7 @@ jobs:
             sleep 2
           done
           echo "lazy-fish not reachable on 8999"
+          docker logs lazy-fish-a11y || true
           exit 1
 
       - name: Run axe-core over 5 views
@@ -208,7 +181,7 @@ jobs:
   visual:
     name: 视觉回归（playwright 截图 + pixelmatch）
     runs-on: ubuntu-latest
-    needs: docker-up
+    needs: test
     timeout-minutes: 15
     # 从 PR-20 起升级为合并门槛：PR + main 都 fail-fast。
     # 之前的 `continue-on-error: ${{ github.event_name == 'pull_request' }}` 是 PR-18
@@ -233,6 +206,11 @@ jobs:
       - name: Install Playwright browsers
         run: npx playwright install --with-deps chromium
 
+      - name: Build & run lazy-fish container
+        run: |
+          docker build -t lazy-fish:visual .
+          docker run -d --name lazy-fish-visual -p 8999:8999 lazy-fish:visual
+
       - name: Wait for lazy-fish
         run: |
           for i in $(seq 1 20); do
@@ -243,6 +221,7 @@ jobs:
             sleep 2
           done
           echo "lazy-fish not reachable on 8999"
+          docker logs lazy-fish-visual || true
           exit 1
 
       - name: Run visual regression over 5 views
@@ -260,4 +239,4 @@ jobs:
 
       - name: Teardown container
         if: always()
-        run: docker stop lazy-fish-a11y || true
+        run: docker stop lazy-fish-visual || true
