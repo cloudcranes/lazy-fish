@@ -205,7 +205,7 @@ pre,
   font-size: var(--fs-11);
   font-weight: 700;
   letter-spacing: var(--tracking-wide);
-  color: var(--text-tertiary);
+  color: var(--text-secondary);
 }
 
 .nav-item {
@@ -421,7 +421,7 @@ pre,
 .card-title-note {
   font-size: var(--fs-12);
   font-weight: 400;
-  color: var(--text-tertiary);
+  color: var(--text-secondary);
 }
 
 .card-body {
@@ -491,14 +491,14 @@ pre,
 }
 
 .btn-primary {
-  background: var(--brand-500);
-  border-color: var(--brand-500);
+  background: var(--brand-600);
+  border-color: var(--brand-600);
   color: var(--text-on-brand);
   font-weight: 600;
 }
 .btn-primary:hover:not(:disabled) {
-  background: var(--brand-600);
-  border-color: var(--brand-600);
+  background: var(--brand-700);
+  border-color: var(--brand-700);
 }
 
 .btn-danger {
@@ -556,7 +556,7 @@ pre,
 /* 危险意图二次确认 */
 .btn.btn-quiet-danger {
   background: transparent;
-  color: var(--text-tertiary);
+  color: var(--text-secondary);
   border-color: transparent;
 }
 .btn.btn-quiet-danger:hover:not(:disabled) {
@@ -588,7 +588,7 @@ pre,
 
 .field-hint {
   font-size: var(--fs-11);
-  color: var(--text-tertiary);
+  color: var(--text-secondary);
 }
 .field-hint.is-danger {
   color: var(--danger-fg);
@@ -929,7 +929,7 @@ pre,
   font-size: var(--fs-11);
   font-weight: 600;
   letter-spacing: 0.04em;
-  color: var(--text-tertiary);
+  color: var(--text-secondary);
   text-transform: uppercase;
 }
 .metric-value {
@@ -949,7 +949,7 @@ pre,
 }
 .metric-note {
   font-size: var(--fs-11);
-  color: var(--text-tertiary);
+  color: var(--text-secondary);
 }
 
 /* 告警条：把后端 last_error 等状态显式抬到首屏 */
@@ -1200,7 +1200,7 @@ pre,
 .live-shot-empty {
   padding: var(--sp-8) var(--sp-4);
   text-align: center;
-  color: var(--text-tertiary);
+  color: var(--text-secondary);
   font-size: var(--fs-12);
   line-height: var(--lh-loose);
 }
@@ -1503,7 +1503,7 @@ pre,
 }
 .plan-bar-note {
   font-size: var(--fs-11);
-  color: var(--text-tertiary);
+  color: var(--text-secondary);
 }
 .plan-dirty {
   display: inline-flex;
@@ -1601,7 +1601,7 @@ pre,
   align-items: center;
   gap: var(--sp-2);
   font-size: var(--fs-11);
-  color: var(--text-tertiary);
+  color: var(--text-secondary);
   line-height: 1.5;
 }
 .estimate b {
@@ -1695,7 +1695,7 @@ pre,
   font-family: var(--font-mono);
   font-variant-numeric: tabular-nums;
   font-size: var(--fs-11);
-  color: var(--text-tertiary);
+  color: var(--text-secondary);
   white-space: nowrap;
   overflow: hidden;
   text-overflow: ellipsis;
@@ -1798,7 +1798,7 @@ pre,
   margin-left: auto;
   font-size: var(--fs-11);
   font-variant-numeric: tabular-nums;
-  color: var(--text-tertiary);
+  color: var(--text-secondary);
 }
 .advanced-note.is-danger {
   color: var(--danger-fg);
@@ -1885,8 +1885,8 @@ pre,
   left: 14px;
   padding: 1px 7px;
   border-radius: var(--r-full);
-  background: var(--brand-500);
-  color: #fff;
+  background: var(--brand-600);
+  color: var(--text-on-brand);
   font-size: var(--fs-11);
   font-weight: 600;
   line-height: 1.6;
@@ -1934,7 +1934,7 @@ pre,
 .shot-empty {
   padding: var(--sp-12) var(--sp-6);
   text-align: center;
-  color: var(--text-tertiary);
+  color: var(--text-secondary);
   font-size: var(--fs-13);
 }
 .marquee {
@@ -1963,7 +1963,7 @@ pre,
   gap: var(--sp-3);
   font-size: var(--fs-11);
   font-family: var(--font-mono);
-  color: var(--text-tertiary);
+  color: var(--text-secondary);
   flex-wrap: wrap;
 }
 

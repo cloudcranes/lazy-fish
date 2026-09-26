@@ -250,7 +250,6 @@ function setView(key) {
   document.querySelectorAll("[data-nav]").forEach((btn) => {
     const isActive = btn.dataset.nav === key;
     btn.setAttribute("aria-current", isActive ? "page" : "false");
-    btn.setAttribute("aria-selected", String(isActive));
     btn.tabIndex = isActive ? 0 : -1;
   });
   const label = NAV_ITEMS.find(([item]) => item === key)?.[1] || "控制台";
