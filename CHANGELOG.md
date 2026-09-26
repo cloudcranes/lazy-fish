@@ -1,5 +1,12 @@
 # Changelog
 
+## [0.1.2](https://github.com/cloudcranes/lazy-fish/compare/xyzw-auto-clicker-v0.1.1...xyzw-auto-clicker-v0.1.2) (2026-09-26)
+
+
+### Features
+
+* **adb:** 远程设备管理（adb connect/disconnect + 持久化注册表 + 启动自动重连） ([a1fb962](https://github.com/cloudcranes/lazy-fish/commit/a1fb962b7ff82e40937173ef4bb9cccb70d44ac0))
+
 ## [0.1.1](https://github.com/cloudcranes/lazy-fish/compare/xyzw-auto-clicker-v0.1.0...xyzw-auto-clicker-v0.1.1) (2026-09-26)
 
 
