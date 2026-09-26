@@ -191,7 +191,8 @@ data/
 └── screenshots/      # 仅缓存最近一帧，不每帧落盘
 docs/
 ├── RECOGNITION-RESEARCH.md   # 识别根因 + 实验数据
-└── UI-DESIGN.md              # 设计令牌、组件契约
+├── UI-DESIGN.md              # 设计令牌、组件契约
+└── OPTIMIZATION-ROADMAP.md   # 三阶段优化路线图（阶段 1、2 已落地）
 relay/                # 可选 WebSocket 中继（远程预览用）
 tests/                # 核心单测 + 识别评测 + UI 冒烟
 ```

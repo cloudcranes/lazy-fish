@@ -191,7 +191,8 @@ data/
 └── screenshots/      # Last-frame cache only; no per-frame dumps
 docs/
 ├── RECOGNITION-RESEARCH.md   # Recognition root cause + experiment data
-└── UI-DESIGN.md              # Design tokens, component contract
+├── UI-DESIGN.md              # Design tokens, component contract
+└── OPTIMIZATION-ROADMAP.md   # Three-phase optimization roadmap (stage 1 & 2 landed)
 relay/                # Optional WebSocket relay for remote preview
 tests/                # Core tests + recognition eval + UI smoke
 ```
