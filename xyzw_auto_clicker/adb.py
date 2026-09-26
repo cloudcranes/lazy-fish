@@ -2,7 +2,12 @@ from __future__ import annotations
 
 import asyncio
 import subprocess
+import time
+from collections import OrderedDict
 from dataclasses import dataclass
+
+_POOL_MAX_SIZE = 5
+_POOL_IDLE_SECONDS = 60.0
 
 
 @dataclass(frozen=True)
@@ -12,7 +17,7 @@ class Device:
 
 
 class AdbError(RuntimeError):
-    """ADB 命令失败。code 字段给前端按类型分流（TIMEOUT / NOT_FOUND / FAILED）。"""
+    """ADB 命令失败。code 字段给前端按类型分流（TIMEOUT / NOT_FOUND / NOT_AVAILABLE / FAILED）。"""
 
     def __init__(self, message: str, *, code: str = "FAILED", stderr: str | None = None) -> None:
         super().__init__(message)
@@ -20,11 +25,84 @@ class AdbError(RuntimeError):
         self.stderr = stderr
 
 
+@dataclass
+class _Slot:
+    proc: subprocess.Popen
+    last_used: float
+
+
+class _ProcPool:
+    """按 device_id 复用 `adb shell` 长连接；LIFO 淘汰。"""
+
+    def __init__(
+        self,
+        *,
+        max_size: int = _POOL_MAX_SIZE,
+        idle_seconds: float = _POOL_IDLE_SECONDS,
+    ) -> None:
+        self._max_size = max_size
+        self._idle_seconds = idle_seconds
+        self._slots: OrderedDict[str, _Slot] = OrderedDict()
+
+    def get_or_create(self, device_id: str, adb_path: str) -> _Slot:
+        slot = self._slots.get(device_id)
+        if slot is not None and slot.proc.poll() is None:
+            slot.last_used = time.monotonic()
+            self._slots.move_to_end(device_id)
+            return slot
+        if slot is not None:  # 进程已死，清掉
+            self._slots.pop(device_id, None)
+        try:
+            proc = subprocess.Popen(
+                [adb_path, "-s", device_id, "shell"],
+                stdin=subprocess.PIPE,
+                stdout=subprocess.DEVNULL,
+                stderr=subprocess.PIPE,
+            )
+        except (FileNotFoundError, OSError) as exc:
+            raise AdbError(
+                f"无法启动 adb shell for {device_id}",
+                code="NOT_AVAILABLE",
+                stderr=str(exc),
+            ) from exc
+        slot = _Slot(proc=proc, last_used=time.monotonic())
+        self._slots[device_id] = slot
+        self._evict_idle()
+        return slot
+
+    def _evict_idle(self) -> None:
+        if len(self._slots) <= self._max_size:
+            return
+        now = time.monotonic()
+        for key in list(self._slots):
+            slot = self._slots[key]
+            if now - slot.last_used >= self._idle_seconds:
+                self._kill_slot(key, slot)
+                del self._slots[key]
+                if len(self._slots) <= self._max_size:
+                    return
+
+    @staticmethod
+    def _kill_slot(key: str, slot: _Slot) -> None:
+        if slot.proc.poll() is None:
+            slot.proc.kill()
+            try:
+                slot.proc.wait(timeout=1)
+            except subprocess.TimeoutExpired:
+                slot.proc.terminate()
+
+    def close(self) -> None:
+        for key, slot in list(self._slots.items()):
+            self._kill_slot(key, slot)
+        self._slots.clear()
+
+
 class AdbClient:
     def __init__(self, adb_path: str = "adb", timeout_seconds: float = 10) -> None:
         self.adb_path = adb_path
         self.timeout_seconds = timeout_seconds
         self._device_args_cache: dict[str | None, list[str]] = {None: []}
+        self._pool = _ProcPool()
 
     async def _run(self, args: list[str], *, input_bytes: bytes | None = None) -> bytes:
         def call() -> bytes:
@@ -85,4 +163,24 @@ class AdbClient:
         return await self._run([*self._device_args(device_id), "exec-out", "screencap", "-p"])
 
     async def tap(self, x: int, y: int, device_id: str | None = None) -> None:
-        await self._run([*self._device_args(device_id), "shell", "input", "tap", str(x), str(y)])
+        if device_id is None:
+            await self._run(["shell", "input", "tap", str(x), str(y)])
+            return
+        cmd = f"input tap {x} {y}\n".encode()
+
+        def call() -> None:
+            slot = self._pool.get_or_create(device_id, self.adb_path)
+            assert slot.proc.stdin is not None
+            try:
+                slot.proc.stdin.write(cmd)
+                slot.proc.stdin.flush()
+            except (BrokenPipeError, OSError) as exc:
+                # 池里的 shell 进程已死，淘汰后让上层重试 / 报 NOT_AVAILABLE
+                self._pool._slots.pop(device_id, None)  # noqa: SLF001
+                raise AdbError(
+                    f"adb shell 长连接不可用：{device_id}",
+                    code="NOT_AVAILABLE",
+                    stderr=str(exc),
+                ) from exc
+
+        await asyncio.to_thread(call)
