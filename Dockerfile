@@ -42,12 +42,14 @@ ENV PYTHONDONTWRITEBYTECODE=1 \
     PATH="/install/bin:${PATH}" \
     PYTHONPATH="/install/lib/python3.12/site-packages"
 
-# 运行时只装 opencv-python-headless 实际需要的两个系统库。
+# 运行时装 opencv-python-headless 需要的系统库 + adb 客户端
+# （PR-27 远程设备管理：镜像内自带 adb，connect/disconnect/截图/点击全走容器内 adb）。
 # 合并 RUN 层 + --no-install-recommends + 清理 apt lists。
 RUN apt-get update \
  && apt-get install -y --no-install-recommends \
         libgl1 \
         libglib2.0-0 \
+        adb \
  && rm -rf /var/lib/apt/lists/*
 
 # builder 阶段的 site-packages 复用进来；COPY --from 不会带 pip / build-base。
@@ -64,7 +66,8 @@ RUN mkdir -p /app/data/templates /app/data/plans /app/data/screenshots
 
 EXPOSE 8999
 
-# 容器内不连 adb，跑纯 web；adb 转发留给宿主侧的 adb-server。
+# 容器内自带 adb；本机 USB 设备连宿主 adb-server 时用 host.docker.internal:5037，
+# 远程设备直接在 UI 用 adb connect host:port。
 HEALTHCHECK --interval=30s --timeout=5s --start-period=10s --retries=3 \
   CMD python -c "import urllib.request, json, sys; \
 r = urllib.request.urlopen('http://127.0.0.1:8999/api/health', timeout=3); \
