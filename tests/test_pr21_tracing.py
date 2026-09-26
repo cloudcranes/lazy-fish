@@ -197,6 +197,42 @@ def test_matcher_match_span_records_template_count_and_hit(monkeypatch, tmp_path
         monkeypatch.setattr(tracing_setup, "_provider", None)
 
 
+def test_otlp_path_initializes_when_endpoint_set(monkeypatch):
+    """PR-24: 设了 OTEL_EXPORTER_OTLP_ENDPOINT 时，provider 上挂的必须是 OTLPSpanExporter。
+
+    pytest 默认无该 env → 走 ConsoleSpanExporter；本用例 monkeypatch 设上
+    endpoint 后再调用 configure_tracer，校验 provider 的 BatchSpanProcessor
+    里包的是 OTLPSpanExporter 实例。stdout 关闭时 console 路径会跳过，OTLP
+    路径必须无这个约束——任何 endpoint 设值都挂 OTLP。
+    """
+    monkeypatch.delenv("OTEL_SDK_DISABLED", raising=False)
+    monkeypatch.setenv("OTEL_EXPORTER_OTLP_ENDPOINT", "http://collector.example:4317")
+    monkeypatch.delenv("OTEL_EXPORTER_OTLP_PROTOCOL", raising=False)
+    import opentelemetry.trace as ot_trace
+    import xyzw_auto_clicker.tracing_setup as tracing_setup
+    from opentelemetry.exporter.otlp.proto.grpc.trace_exporter import OTLPSpanExporter
+    from xyzw_auto_clicker.tracing_setup import configure_tracer
+
+    monkeypatch.setattr(tracing_setup, "_provider", None)
+    ot_trace._TRACER_PROVIDER_SET_ONCE._done = False
+    ot_trace._TRACER_PROVIDER = None
+    try:
+        configure_tracer("lazy-fish")
+        provider = tracing_setup._provider
+        assert provider is not None
+        processors = provider._active_span_processor._span_processors
+        assert processors, "endpoint 设值但 provider 上未挂任何 span processor"
+        # 至少一个 processor 的 exporter 是 OTLPSpanExporter
+        exporters = [getattr(p, "span_exporter", None) for p in processors]
+        assert any(isinstance(e, OTLPSpanExporter) for e in exporters), (
+            f"endpoint 设值但未挂 OTLPSpanExporter; got {[type(e).__name__ for e in exporters]}"
+        )
+    finally:
+        ot_trace._TRACER_PROVIDER_SET_ONCE._done = False
+        ot_trace._TRACER_PROVIDER = None
+        monkeypatch.setattr(tracing_setup, "_provider", None)
+
+
 def test_app_http_middleware_emits_span(monkeypatch, tmp_path):
     """FastAPI 中间件为每个请求建一条 span，attributes 含 method/route/status_code。
     app 模块的 _tracer 同理必须重新绑定到当前全局 provider。

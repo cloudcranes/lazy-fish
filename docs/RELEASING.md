@@ -80,6 +80,10 @@ docker run --rm -p 8999:8999 -v "$PWD/data:/app/data" ghcr.io/cloudcranes/lazy-f
 > 仅在 release-please 失灵、或需要为某个版本单跑一次发布时使用。
 > PR-16（wave5）起，dispatch 路径已**解闸**：可以独立完成构建 → 推 GHCR → 创建 GitHub Release，不再被 `event_name == 'push'` 闸拦住。
 
+### 3.0 OTel 部署
+
+> PR-24 起，应用镜像通过 gRPC OTLP（默认 endpoint `http://host.docker.internal:4317`，协议 `grpc`）把 trace 发到宿主机 OTel Collector；Collector 再按需转发到 Jaeger / Tempo / 商业 SaaS。env 未设值时退回 `ConsoleSpanExporter` 兜底（pytest / 本地 dev / 无 Collector 的 CI runner），`OTEL_SDK_DISABLED=true` 时直接走 NoOp。详细拓扑 + 镜像变体矩阵见 `docs/OPTIMIZATION-ROADMAP.md §8.10.1「可观测拓扑」`。
+
 ### 3.1 通过 GitHub UI
 
 1. 打开 Actions → **Release** workflow → **Run workflow**；

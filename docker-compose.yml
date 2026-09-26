@@ -15,6 +15,11 @@ services:
       LAZY_FISH_PORT: 8999
       # PR-14：停止信号文件落进 ./data 卷所在目录，容器重启后状态保留。
       LAZY_FISH_STOP_FILE: /app/data/STOP
+      # PR-24：OTel traces → collector via gRPC OTLP。默认指向 host 上的
+      # OTel Collector（4317），生产环境请改成 collector 服务名 / 真实 endpoint。
+      # 取消设置即可退回 ConsoleSpanExporter 兜底（仅本机调试用）。
+      OTEL_EXPORTER_OTLP_ENDPOINT: http://host.docker.internal:4317
+      OTEL_EXPORTER_OTLP_PROTOCOL: grpc
     volumes:
       # Persist templates / plans / last-frame cache on the host.
       - ./data:/app/data

@@ -9,3 +9,5 @@ jinja2>=3.1
 opentelemetry-api==1.34.1
 opentelemetry-sdk==1.34.1
 opentelemetry-instrumentation-fastapi==0.55b1
+# PR-24: OTLP gRPC exporter（与 sdk 同版本；默认走 console，未设 OTEL_EXPORTER_OTLP_ENDPOINT 时不挂）
+opentelemetry-exporter-otlp==1.34.1

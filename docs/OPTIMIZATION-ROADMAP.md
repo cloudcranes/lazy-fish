@@ -665,6 +665,77 @@ GET /api/health:
 
 **新增里程碑**：阶段 3 wave8 把 §3 长期项中两个「observability / release governance」短板同时收口：① OTel traces 从「写依赖 + 写中间件 + 写 span」三件套落地为正式可观测基础设施（中间件覆盖 HTTP、span 覆盖 runner.iter / adb.screenshot / adb.tap / matcher.match，OTLP 留口等 collector side provisioning 后即插即用，pytest 全绿），§3 中长期悬而未决的「OpenTelemetry auto-instrumentation」正式关闭；② release-please 升 1.0 从「触发就干」升级为「6 项 checklist + 5 步操作手册」的可执行 SOP，把 wave7 wave5 wave3 多轮 release-please 落地经验沉淀到 `docs/RELEASING.md §6`，下次手动升 1.0 之前能逐条复核，避免「赌下游兼容性」。剩余触发条件（multi-scale batch、`safety` 第三方依赖扫描、多 Runner 实例并发、OTel collector side provisioning + OTLP exporter 替换 BSP 等）继续按 §3 条件按需启动。
 
+### 8.10 阶段 3 wave9 — OTel pytest 噪声收口 + OTLP exporter 接入（已落地，2026-09-26）
+
+> wave9 把 §3 表里 wave8 留下的两个**非阻断短板**同时关闭：① pytest 跑完 `test_pr21_tracing.py` 后偶现 OTel 后台线程 `ValueError: I/O operation on closed file`（BSP daemon 在 pytest 关闭 capture 后还在异步 flush 已闭 stdout）；② collector-side OTLP wiring 未接（PR-21 仅做 console 兜底）。commit 已在 origin/main（`d32cc62..b6246bc main -> main`）。
+
+**commit 链**（1 commit）：
+
+| SHA | 说明 |
+|---|---|
+| `b6246bc` | feat(observability): OTLP exporter 接入（PR-24） |
+
+> PR-23（provider.shutdown pytest 噪声收口）由其他成员在另一 PR 独立提交，本 wave9 §8.10 仅记录 PR-24；pytest stderr 偶现 `ValueError: I/O operation on closed file` 由 PR-23 关闭。
+
+**PR-24：OTLP exporter 接入**（commit `b6246bc`，7 文件 +209/-11）
+
+| 变更 | 文件 |
+|---|---|
+| `opentelemetry-exporter-otlp==1.34.1`（与 sdk 同版本；含 grpc 协议实现） | `requirements.txt` |
+| 新增 `_otlp_endpoint()` 工具函数 + `configure_tracer` 三分支：① `OTEL_EXPORTER_OTLP_ENDPOINT` 设值 → `BatchSpanProcessor(OTLPSpanExporter())`（生产路径）；② 未设值 + stdout 活着 → `BatchSpanProcessor(ConsoleSpanExporter())`（pytest / 本地兜底，与 PR-21 行为一致）；③ 未设值 + stdout 已闭 → 不挂（避免 ValueError） | `xyzw_auto_clicker/tracing_setup.py` |
+| 默认 ENV：`OTEL_EXPORTER_OTLP_ENDPOINT=http://host.docker.internal:4317` + `OTEL_EXPORTER_OTLP_PROTOCOL=grpc`（容器化部署开箱即发到宿主机 collector） | `docker-compose.yml` + `Dockerfile` |
+| 新增 `test_otlp_path_initializes_when_endpoint_set`：monkeypatch 设 endpoint → provider 上必挂 `OTLPSpanExporter`；pytest 默认无 env 时仍走 console 不变 | `tests/test_pr21_tracing.py` |
+| §8.10「可观测拓扑」附录：collector + 镜像变体 + env 矩阵 + 部署清单 | `docs/OPTIMIZATION-ROADMAP.md` |
+| §3「OTel 部署」补一句：默认 endpoint + 取消设置退回 console 的行为契约 | `docs/RELEASING.md` |
+
+#### 8.10.1 可观测拓扑（PR-24）
+
+容器内应用通过 gRPC OTLP 把 span 发到宿主机 OTel Collector（默认 `:4317`）；Collector 再把 trace 转发到任意后端（Jaeger / Tempo / VictoriaMetrics / 商业 SaaS）。应用本身不感知后端，只与 Collector 通信。
+
+```
+                ┌────────────────────────────┐
+                │  lazy-fish 容器 (PR-24)    │
+                │                            │
+                │  FastAPI middleware ──┐    │
+                │  runner.iter ─────────┤    │
+                │  adb.screenshot ───────┼──▶ OTLPSpanExporter
+                │  adb.tap ──────────────┤    (gRPC :4317)
+                │  matcher.match ────────┘    │
+                └──────────────┬─────────────┘
+                               │ gRPC OTLP
+                               ▼
+                ┌────────────────────────────┐
+                │  OTel Collector (宿主机)   │
+                │  receivers.otlp.protocol   │
+                │  = grpc                    │
+                │  endpoint :4317            │
+                └──────────────┬─────────────┘
+                               │ exporters (按需)
+              ┌────────────────┼─────────────────┐
+              ▼                ▼                 ▼
+        ┌─────────┐      ┌──────────┐      ┌──────────┐
+        │ Jaeger  │      │  Tempo   │      │  SaaS    │
+        │  (UI)   │      │  (Grafana)│      │Honeycomb │
+        └─────────┘      └──────────┘      └──────────┘
+```
+
+**镜像变体**（env 矩阵）：
+
+| 部署形态 | `OTEL_EXPORTER_OTLP_ENDPOINT` | exporter 实际走向 | 备注 |
+|---|---|---|---|
+| **生产**（默认） | `http://host.docker.internal:4317`（Dockerfile / compose 设置） | `OTLPSpanExporter` → Collector → 后端 | 容器化部署开箱即用；改 endpoint 即可换 Collector |
+| **CI / 本地 dev** | 未设值（pytest / 直接 `python -m xyzw_auto_clicker`） | `ConsoleSpanExporter` → stderr | `tracing_setup._stdout_alive()` 守卫：pytest capture 关闭时不挂，避免后台 flush 写满屏 ValueError |
+| **完全关 OTel** | 未设值 + `OTEL_SDK_DISABLED=true` | NoOp tracer（不进 SDK） | 与 PR-21 契约一致 |
+
+**部署清单**（生产启用 OTLP 时）：
+
+1. 宿主起 OTel Collector（`otelcol-contrib` ≥ 0.95），监听 `:4317` gRPC；receivers 段加 `otlp.protocols.grpc.endpoint: 0.0.0.0:4317`；
+2. docker-compose 部署 lazy-fish 时保留 `OTEL_EXPORTER_OTLP_ENDPOINT` 默认值；多机部署把 endpoint 换成 Collector 服务名/IP；
+3. Collector exporters 按需配 Jaeger / Tempo / OTLP/HTTP 转发；本仓库不绑死后端；
+4. 想退回纯 stderr span 输出：取消 ENV 行（`docker compose run -e OTEL_EXPORTER_OTLP_ENDPOINT=` 或删 Dockerfile ENV）；pytest 默认就走 console，不需要任何配置。
+
+**新增里程碑**：阶段 3 wave9 把 wave8 留下的「pytest BSP 噪声」+「OTLP 未接」两个非阻断项收口为正式基础设施：① `force_shutdown()` + autouse fixture 把 BSP daemon thread 的 I/O closed ValueError 消声，pytest exit code 0 + 117+1 例全绿；② OTLP gRPC exporter 默认挂上，docker-compose / Dockerfile 开箱即发到宿主机 Collector，env 三态（生产 / 本地 dev / 完全关）矩阵清晰。`§3 触发条件表` 的「OpenTelemetry auto-instrumentation」已完全闭环（trace 采集 + 导出 + 后端解耦），剩余触发条件（multi-scale batch、`safety` 第三方依赖扫描、多 Runner 实例并发等）继续按 §3 条件按需启动。
+
 ---
 
 > 关联文档：[docs/RECOGNITION-RESEARCH.md](./RECOGNITION-RESEARCH.md)（识别根因 + 实验数据）。

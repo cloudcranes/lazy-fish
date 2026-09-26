@@ -35,6 +35,10 @@ ENV PYTHONDONTWRITEBYTECODE=1 \
     # PR-14：默认把停止信号文件落在 /app/data/STOP，与 data/ 卷同区，
     # 容器重启或重建后 STOP 标记不会丢失。
     LAZY_FISH_STOP_FILE=/app/data/STOP \
+    # PR-24：OTel traces → collector via gRPC OTLP；与 docker-compose.yml 默认一致。
+    # 取消 ENV 行即可退回 ConsoleSpanExporter 兜底（仅本机调试用）。
+    OTEL_EXPORTER_OTLP_ENDPOINT=http://host.docker.internal:4317 \
+    OTEL_EXPORTER_OTLP_PROTOCOL=grpc \
     PATH="/install/bin:${PATH}" \
     PYTHONPATH="/install/lib/python3.12/site-packages"
 
