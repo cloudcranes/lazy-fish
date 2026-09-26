@@ -64,7 +64,7 @@ async def _lifespan(app: FastAPI):
         yield
     finally:
         # shutdown 强制 flush，避免 uvicorn 优雅退出时丢掉缓冲里最后几秒的 span
-        shutdown_tracer()
+        shutdown_tracer(timeout_millis=2000)
 
 
 app = FastAPI(title="咸鱼之王自动点击器", lifespan=_lifespan)

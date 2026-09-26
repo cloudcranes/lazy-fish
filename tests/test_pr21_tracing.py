@@ -292,3 +292,62 @@ def test_app_http_middleware_emits_span(monkeypatch, tmp_path):
         ot_trace._TRACER_PROVIDER_SET_ONCE._done = False
         ot_trace._TRACER_PROVIDER = None
         monkeypatch.setattr(tracing_setup, "_provider", None)
+
+
+@pytest.fixture(autouse=True)
+def _otel_force_shutdown_after_test(monkeypatch):
+    """每条用例跑完都强制收口 OTel provider，把 BSP 后台线程 join 掉，避免 pytest 关闭捕获流后
+    BSP worker 还在异步写 ConsoleSpanExporter → stderr 满屏 I/O closed ValueError。
+
+    关键点：模块级 `tracing_setup._provider` 不一定是当前活动的 provider —— 测试里
+    `monkeypatch.setattr(tracing_setup, "_provider", None)` 后又重新 `configure_tracer()`，
+    但全局 `ot_trace._TRACER_PROVIDER` 可能仍是旧对象。所以这里同时拿「模块 _provider」
+    和「全局 tracer provider」来 shutdown。
+    ponytail: 用 yield-before 形式实现 teardown；fixture 自身不需要 setup 动作。
+    """
+    yield
+    from xyzw_auto_clicker import tracing_setup as _tracing_setup
+
+    _tracing_setup.force_shutdown()
+
+
+def test_shutdown_cleans_bsp(monkeypatch):
+    """force_shutdown() 必须把 BatchSpanProcessor 的后台 worker thread 收掉。
+
+    之前测试 stderr 的 `ValueError: I/O operation on closed file` 来自 BSP daemon
+    在 pytest 捕获流关闭后还在异步 flush；shutdown() 通过 BatchProcessor.shutdown()
+    把 _worker_thread.join() → 线程不再存活。
+    """
+    monkeypatch.delenv("OTEL_SDK_DISABLED", raising=False)
+    import opentelemetry.trace as ot_trace
+    import xyzw_auto_clicker.tracing_setup as tracing_setup
+    from xyzw_auto_clicker.tracing_setup import configure_tracer, force_shutdown
+
+    monkeypatch.setattr(tracing_setup, "_provider", None)
+    ot_trace._TRACER_PROVIDER_SET_ONCE._done = False
+    ot_trace._TRACER_PROVIDER = None
+    try:
+        configure_tracer("lazy-fish")
+        provider = tracing_setup._provider
+        assert provider is not None
+        # 触发 BSP 启动：起一条 span 并 end，让 worker thread 进入 running 状态
+        tracer = ot_trace.get_tracer("lazy-fish")
+        with tracer.start_as_current_span("warmup.bsp"):
+            pass
+        # 拿 BSP 的 BatchProcessor worker thread 句柄，断言它 alive
+        bsp = provider._active_span_processor._span_processors[0]
+        bp = bsp._batch_processor
+        worker_thread = bp._worker_thread
+        assert worker_thread.is_alive(), "BSP worker 应该在 flush span 后仍 alive"
+        # 收口：force_shutdown 等价于 flush + shutdown，必须 join BSP worker
+        force_shutdown()
+        # shutdown() 后 provider 应被清空（避免下一次测试拿到被 shutdown 的旧 provider）
+        assert tracing_setup._provider is None
+        # BSP 的 worker thread 必须被 join → is_alive() == False
+        assert not worker_thread.is_alive(), (
+            "BSP worker thread 未被 join，仍在后台运行 → 后续测试 stderr 会爆 ValueError"
+        )
+    finally:
+        ot_trace._TRACER_PROVIDER_SET_ONCE._done = False
+        ot_trace._TRACER_PROVIDER = None
+        monkeypatch.setattr(tracing_setup, "_provider", None)

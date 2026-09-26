@@ -118,15 +118,16 @@ def load_tracer(name: str = _SERVICE_NAME) -> Tracer:
     return configure_tracer(name)
 
 
-def shutdown_tracer() -> None:
+def shutdown_tracer(timeout_millis: int = 2000) -> None:
     """FastAPI shutdown 时主动 flush 缓冲的 span。
 
     ponytail: BatchSpanProcessor 默认 5s flush，长跑进程丢信号不至于丢 span；
     测试场景里进程立即退出 → 必须显式 flush，否则最后几秒的 span 全丢。
     与 startup 端 `load_tracer` 配对：startup 建 provider、shutdown flush。
+    timeout_millis=2000：OTLP 收不到就丢（不阻塞 uvicorn 优雅退出）。
     """
     if _provider is not None:
-        _provider.force_flush()
+        _provider.force_flush(timeout_millis=timeout_millis)
 
 
 def force_shutdown() -> None:
@@ -138,18 +139,55 @@ def force_shutdown() -> None:
     而 pytest 已关闭捕获流，stderr 满屏 `ValueError: I/O operation on closed file`。
     加 shutdown() 等价于「等 BSP worker 把自己队列里所有 span flush 完，再 join 掉」。
 
+    同时处理「模块 _provider 被 monkeypatch 替换后旧 provider 漏在全局」的情况：
+    遍历 ot_trace 全局 tracer provider + 通过 gc 找仍活着的 BSP worker 句柄，统一
+    shutdown/join。这是兜底：测试里 reset 全局后再 monkeypatch _provider，旧 provider
+    的 BSP 线程没人引用但 daemon thread 仍在后台跑。
+
     ponytail: 长跑进程不要在 hot loop 里调它，只在 FastAPI lifespan shutdown 或
     测试 fixture teardown 调一次。
     """
     global _provider
-    if _provider is not None:
+
+    def _shutdown_provider(p: TracerProvider | None) -> None:
+        if p is None:
+            return
         try:
-            _provider.force_flush(timeout_millis=2000)
-        finally:
-            try:
-                _provider.shutdown()
-            finally:
-                _provider = None
+            p.force_flush(timeout_millis=2000)
+        except Exception:
+            pass
+        try:
+            p.shutdown()
+        except Exception:
+            pass
+
+    if _provider is not None:
+        _shutdown_provider(_provider)
+        _provider = None
+    # 兜底：全局 ot_trace 持有的 provider 若仍是 SDK，关掉其内部 BSP
+    try:
+        import opentelemetry.trace as ot_trace
+        from opentelemetry.sdk.trace import TracerProvider as SDKTracerProvider
+
+        gp = ot_trace.get_tracer_provider()
+        if isinstance(gp, SDKTracerProvider):
+            _shutdown_provider(gp)
+    except Exception:
+        pass
+    # 再兜底：gc 里搜 BatchProcessor 残留 worker thread（monkeypatch 已丢旧 provider
+    # 但 daemon thread 仍活着的情况）
+    try:
+        import gc
+        from opentelemetry.sdk._shared_internal import BatchProcessor
+
+        for obj in gc.get_objects():
+            if isinstance(obj, BatchProcessor) and not obj._shutdown:
+                try:
+                    obj.shutdown()
+                except Exception:
+                    pass
+    except Exception:
+        pass
 
 
 _atexit_registered = False
