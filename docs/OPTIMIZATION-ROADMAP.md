@@ -1,6 +1,6 @@
 # lazy-fish 优化路线图
 
-> **生成日期**: 2026-09-25；**阶段 3 落地补登**: 2026-09-26；**阶段 3 wave2 补登**: 2026-09-26；**阶段 3 wave3 补登**: 2026-09-26
+> **生成日期**: 2026-09-25；**阶段 3 落地补登**: 2026-09-26；**阶段 3 wave2 补登**: 2026-09-26；**阶段 3 wave3 补登**: 2026-09-26；**阶段 3 wave4 补登**: 2026-09-26；**阶段 3 wave5 补登**: 2026-09-26；**阶段 3 wave6 补登**: 2026-09-26
 > **性质**: 只读整合。基于 backend-audit.md（28 条）与 t2-frontend-audit.md（13 条）。
 > **评分维度**: 性价比（effort / impact）× 风险（泄露 / 数据丢失 / UX 坏掉）。
 > **三阶段**: 阶段 1（≤ 1 周，必做）/ 阶段 2（≤ 1 月，值做）/ 阶段 3（长期，备选）。
@@ -444,6 +444,113 @@ GET /api/health:
 - `LAZY_FISH_STOP_FILE` env 在 settings 模块**加载时**读取，运行时改 env 不会立即生效（与 `LAZY_FISH_HOST` / `LAZY_FISH_PORT` 等保持一致语义）；如需运行时热切换 STOP_FILE，应在 `runner._should_stop` 改为读环境变量（**非阻断**，当前没有这个需求）。
 
 **新增里程碑**：阶段 3 wave4 把 wave3 留下的两个偏差（dispatch 路径 VERSION 退化 + `STOP_FILE` 写死）收口为正式发版基础设施；release-please → tag → release.yml 的 canonical 路径在 `docs/RELEASING.md` 文档化；容器内 STOP 标记现与 `./data` 卷同区，重启不丢状态。剩余触发条件（multi-scale batch、OpenTelemetry、视觉回归、`safety` 第三方依赖扫描、多 Runner 实例并发等）继续按 §3 条件按需启动。
+
+### 8.6 阶段 3 wave5 — Prometheus /api/metrics + release.yml dispatch 解闸（已落地，2026-09-26）
+
+> wave5 把 wave4 留下的两个**应急短板**收口为正式基础设施：① `/api/metrics` 只输出 JSON，Prometheus / VictoriaMetrics 文本抓取无标准端点；② `release.yml` 的 `workflow_dispatch` 路径在 wave4 仅给短 SHA 应急用，缺真正的版本选择入口 + 独立 publish / GH Release 通道。commit 已在 origin/main（`004f181..602cd64 main -> main`）。
+
+**commit 链**（2 commits，按时间倒序）：
+
+| SHA | 说明 |
+|---|---|
+| `602cd64` | feat(metrics): Prometheus text/plain; version=0.0.4 via Accept negotiation (PR-15) |
+| `004f181` | ci(release): unlock workflow_dispatch publish path (PR-16) |
+
+**PR-15：Prometheus /api/metrics Accept 协商**（commit `602cd64`，3 文件 +229/-9）
+
+| 变更 | 文件 |
+|---|---|
+| `/api/metrics` 新增 `Accept` 头协商：含 `text/plain` 或 `*/*` → 走 `text/plain; version=0.0.4; charset=utf-8`（Prometheus / VictoriaMetrics 兼容）；显式 `application/json` → JSON；无头 → JSON；`LOG_JSON≠1` → 404 不变 | `xyzw_auto_clicker/app.py` |
+| 5 个指标（`uptime_seconds` / `process_resident_memory_bytes` / `runner_status` / `last_screenshot_mtime_seconds` / `tasks_started_total`）全部带 `# HELP` + `# TYPE` 文本输出；字段顺序稳定便于解析 | `xyzw_auto_clicker/app.py` |
+| 6 用例：JSON Accept / text/plain Accept / `*/*` Accept / runner.status 变更反映到 Prometheus / 无 Accept 头走 JSON / 关闭态 404 | `tests/test_pr15_metrics.py`（新） |
+| 既有 PR-8 契约测试同步调整 `test_metrics_endpoint_*` 三例与新逻辑对齐（仍是 16 例全绿） | `tests/test_pr8_contract.py` |
+
+**PR-16：release.yml dispatch 解闸 + inputs.version**（commit `004f181`，3 文件 +71/-20）
+
+| 变更 | 文件 |
+|---|---|
+| `on.workflow_dispatch.inputs.version`：required + type=choice + default `v0.1.0` + 10 选项 `v0.1.0..v1.0.0`；`Extract version` 在 dispatch 路径读 `${INPUTS_VERSION:-${GITHUB_SHA:0:7}}` 并去 `v` 前缀；tag push 路径不变（仍取 `${GITHUB_REF_NAME#v}`） | `.github/workflows/release.yml` |
+| Login to GHCR / Build & push image (`provenance: false`) / Create GitHub release 三步统一闸门改为 `if: github.event_name == 'push' \|\| github.event_name == 'workflow_dispatch'`；dispatch 路径独立走通构建 → 推 GHCR → 创建 GH Release 完整链路 | `.github/workflows/release.yml` |
+| GH Release `tag_name` 兜底为 `v<inputs.version>`（dispatch）；`generate_release_notes` 仅 tag push 启用（dispatch 不附 release notes）；`docker/build-push-action` 加 `provenance: false` 满足非 SLSA 场景 | `.github/workflows/release.yml` |
+| `VERSION ?= v0.1.0` 变量；`release-dispatch` 调 `gh workflow run release.yml --ref main -f version=$(VERSION)`；仍带 DEPRECATED 提示 | `Makefile` |
+| §3 改写为「手动触发发布（应急路径 / 解闸）」含 dispatch 行为表 / Makefile 用法 / dispatch vs tag-push 对比表；§4 / §5 同步引用 PR-16 | `docs/RELEASING.md` |
+
+**总验收验证**（gate-reviewer 复核，2026-09-26）：
+
+- `python -m pytest tests/ -q` → **112 passed in 7.54s**（基线 106 + PR-15 新增 6，零回归；依赖结果里提到的 2 例 `test_pr8_contract.py` 失败已恢复：当前 HEAD 下该文件 16 例全绿）
+- `python -m py_compile xyzw_auto_clicker/app.py` → exit 0
+- YAML 解析：`.github/workflows/release.yml` → `yaml.safe_load` OK；`on.workflow_dispatch.inputs.version` = choice / required / default=`v0.1.0` / 10 选项 `v0.1.0..v1.0.0`
+- JSON 解析：`release-please-config.json` + `.release-please-manifest.json` OK（未变更）
+- `/api/metrics` 双 Accept 路径覆盖：`Accept: application/json` → `application/json`；`Accept: text/plain; version=0.0.4` → `text/plain; version=0.0.4; charset=utf-8` 含 HELP/TYPE；`Accept: */*` → Prometheus 文本；无 Accept → JSON（`test_metrics_json_when_no_accept_header` 走 ASGI scope 直发断言）
+- `test_pr15_metrics.py` 6 例 + `test_pr8_contract.py` 16 例（含 3 例 metrics 调整）独立复核全绿
+- `release.yml` dispatch 路径语义：`GITHUB_EVENT_NAME == "workflow_dispatch"` + `INPUTS_VERSION` 有值 → `VERSION="${RAW#v}"` 正确去 `v` 前缀；下游 GHCR login / buildx push / GH Release 闸门在 dispatch 事件下放行；`tag_name` 兜底 `v<VERSION>` 正确
+- `release.yml` tag push 路径语义：`GITHUB_EVENT_NAME == "push"` → 仍走 `${GITHUB_REF_NAME#v}`；`generate_release_notes: ${{ github.event_name == 'push' }}` 仅 tag push 启用
+- Makefile `release-dispatch`：底层 `gh workflow run release.yml --ref main -f version=$(VERSION)` 与新 inputs.version 字段对齐；`VERSION ?= v0.1.0` 默认与 workflow 默认一致
+- docs/RELEASING.md §3 行为表 / 对比表 / §4 排错条目「workflow_dispatch 跑出来的镜像 tag 是 `main`」均已更新为「PR-16 已用 `inputs.version` 解闸」
+- `git log --oneline` 显示 `004f181` 与 `602cd64` 已在 origin/main（`main` 分支当前 HEAD = `602cd64`），与依赖结果 SHA 完全一致
+
+**未闭合项 / 已知偏差**：
+
+- wave4 §8.5 留下的「dispatch 路径 `if: github.event_name == 'push'` 闸住 GHCR publish + GH Release」非阻断项已由 wave5 关闭：`release.yml` 三步闸门改为 `push || workflow_dispatch`，dispatch 独立可发布；`inputs.version` choice 字段（10 选项 `v0.1.0..v1.0.0`）给操作者显式版本选择面
+- `dispatch` 路径不打 git tag 是**设计选择**而非偏差：与 wave4 §8.5「dispatch 不污染 GHCR 命名空间」一致；下次需要把 dispatch 升格为正式版本时，由 release-please 在合并下一批 Conventional Commits 后接管即可（避免双源真相）
+- `dispatch` 路径 GH Release 不附 `generate_release_notes` 是**有意保留**：dispatch 是手动应急 / 调试镜像场景，release notes 的真相源仍是 tag push + release-please；如未来需要 dispatch 自动生成 notes，可改为 `generate_release_notes: ${{ github.event_name == 'push' || (github.event_name == 'workflow_dispatch' && inputs.notes) }}`（**非阻断**，当前没有该需求）
+- `inputs.version` 仅 10 个 choice（`v0.1.0..v1.0.0`）：1.0 后需要扩展时同步加 `options` 即可；不引入 `string` + 自定义版本号是为防 typo + 越权发布（**非阻断**，覆盖阶段 3 周期内全部预期发版点）
+- `pyright-baseline.json` 维持 `diagnostics=[]`；新增 PR-15 / PR-16 提交未触发任何新增诊断，wave3 invariant 完整
+
+**新增里程碑**：阶段 3 wave5 把 wave4 留下的「Prometheus 文本端点缺失 + dispatch 仅本地验证」两个非阻断项收口：① `/api/metrics` 通过 Accept 协商同时支持 JSON 与 Prometheus `text/plain; version=0.0.4`，与 Prometheus / VictoriaMetrics 文本抓取标准对齐；② `release.yml` 的 `workflow_dispatch` 路径配上 `inputs.version` choice 字段（10 选项 + 默认 `v0.1.0`）后可以独立完成构建 → 推 GHCR → 创建 GH Release，作为 release-please 失灵或临时重发的正式应急路径。剩余触发条件（multi-scale batch、OpenTelemetry、视觉回归、`safety` 第三方依赖扫描、多 Runner 实例并发等）继续按 §3 条件按需启动。
+
+### 8.7 阶段 3 wave6 — axe-core PR fail-fast 升级 + 视觉回归（playwright 截图对比）（已落地，2026-09-26）
+
+> wave6 把 §3 长期项中两个「视觉/可访问性回归」短板同时关闭：① `tests/ui/a11y.mjs` 在 PR-10 时 PR 上挂 `continue-on-error`（axe-core 噪音过渡期），现在 axe-core 报告已清洁（只剩真实 serious/critical），摘掉 PR 上的 `continue-on-error`，PR + main 同等 fail-fast，把 a11y 从「可观察」升级为「合并门槛」；② §3 中长期悬而未决的「视觉回归」首次落地为可运行 baseline：Playwright 拉 5 视图截图 + pixelmatch 0.1% 阈值比对。commit 已在 origin/main（`8c3eb8a..fe4791e main -> main`）。
+
+**commit 链**（2 commits，按时间倒序）：
+
+| SHA | 说明 |
+|---|---|
+| `fe4791e` | feat: PR-18 视觉回归（playwright 截图 + pixelmatch 0.1%） |
+| `8c3eb8a` | feat(ci): a11y job fail-fast on PR — merge threshold (PR-17) |
+
+**PR-17：a11y PR fail-fast 升级为合并门槛**（commit `8c3eb8a`，4 文件 +41/-11）
+
+| 变更 | 文件 |
+|---|---|
+| a11y job 摘除 `continue-on-error: ${{ github.event_name == 'pull_request' }}`，PR + main 同等级 fail-fast；lint / test job 不动（仍维持「PR 上 warn / main 上 fail」语义） | `.github/workflows/ci.yml` |
+| §11 改写为 4 子节（11.1 现状合并门槛 / 11.2 编排与依赖 / 11.3 升级理由 / 11.4 与 §6 关系）；含 PR-10 vs PR-17 对比表与退出码契约（0/1/2） | `docs/UI-DESIGN.md` |
+| 顶部注释显式写出退出码契约（0=pass / 1=serious·critical / 2=env fail），与 §11.2 对齐；脚本逻辑未变（`process.exit(2)` + `process.exit(N>0 ? 1 : 0)`） | `tests/ui/a11y.mjs` |
+| §5「Release PR 卡在 merge」排错行加 a11y 是合并门槛的注脚；新增脚注「a11y 合并门槛（PR-17 起生效）」，提示不要回退 `continue-on-error` | `docs/RELEASING.md` |
+
+**PR-18：视觉回归（playwright 截图 + pixelmatch）**（commit `fe4791e`，6 文件 +462/-4）
+
+| 变更 | 文件 |
+|---|---|
+| 新增 `tests/ui/visual.mjs`：Playwright 拉 5 视图截图（console / plans / templates / capture / logs）@ 1280×900，pixelmatch 0.1% 阈值；首次跑缺失 baseline 自动生成；`--update-baseline` 强制覆盖；退出码 0/1/2（与 a11y.mjs 契约一致） | `tests/ui/visual.mjs`（新） |
+| 仓根 devDeps 加 `pixelmatch ^5.3.0` + `pngjs ^7.0.0` + `fs-extra ^11.2.0`；新增 `test:visual` 与 `test:visual:update` scripts | `package.json` |
+| `tests/ui/package.json` 加同三项（沿 workspaces 下发） | `tests/ui/package.json` |
+| 新增 `visual` job（`needs: docker-up`）：PR 上 `continue-on-error` / main fail-fast；失败时上传 `tests/ui/diffs/*.diff.png` 为 artifact | `.github/workflows/ci.yml` |
+| 追加 §12「视觉回归（playwright 截图 + pixelmatch）」节，含依赖、判失败标准、Baseline 生命周期（含更新流程 6 步）、CI 编排、与 §11 a11y 的关系、阈值 0.1% 权衡 | `docs/UI-DESIGN.md` |
+| 仓根 `package-lock.json`（新）：使 CI `npm ci` 可执行（PR-10 漏建，本次补上） | `package-lock.json`（新） |
+
+**总验收验证**（gate-reviewer 复核，2026-09-26）：
+
+- `git log --oneline` 显示 `8c3eb8a` 与 `fe4791e` 均已在 origin/main（HEAD = `fe4791e`），与依赖结果 SHA 完全一致
+- `python -m pytest tests/ -q` → **112 passed in 7.62s**（与 wave5 基线 112 例持平，零回归）
+- `python -m py_compile scripts/pyright_check.py` → exit 0（pyright script 编译通过；wave6 未触 Python 源码，故只验引用脚本）
+- `node --check tests/ui/a11y.mjs` → exit 0；`node --check tests/ui/visual.mjs` → exit 0（双 mjs 语法合规）
+- `process.exit` grep in `tests/ui/`：`a11y.mjs`（line 80 `process.exit(2)` + line 90 `process.exit(N>0 ? 1 : 0)`）、`visual.mjs`（line 130 `process.exit(2)` + line 141 `process.exit(failed.length > 0 ? 1 : 0)`）— 退出码三态语义（0/1/2）与 §11.2 / §12 完全对齐
+- `yaml.safe_load('.github/workflows/ci.yml')` OK；a11y job 行 157-202 已无 `continue-on-error`（PR-17 摘除成功）；visual job 行 204-257 含 `continue-on-error: ${{ github.event_name == 'pull_request' }}`（PR warn / main fail-fast，与 a11y 升级前的策略对齐）
+- docs/UI-DESIGN.md §11 / §12 / docs/RELEASING.md §5 脚注：PR-17 vs PR-10 对比表、退出码契约 0/1/2、视觉回归 baseline 更新流程 6 步、a11y 合并门槛注脚均已落地
+- `tests/ui/visual.mjs` baseline 缺失自生成逻辑：fse.ensureDirSync(BASELINE_DIR) + 首次缺失即写 PNG 并视为 pass（与 §12「baseline 缺失 = 初始化」一致），本地无 docker 故 baseline PNG 由 CI 首次跑 visual job 时生成
+
+**未闭合项 / 已知偏差**：
+
+- wave6 §3 候选的「视觉回归」已正式落地；但 baseline PNG 在 CI 首次跑 visual job 之前不存在（本地无 docker，故无法本地生成 baseline 走比对路径）。第一次 visual job 失败视为「初始化」，会写 PNG 入 `tests/ui/baselines/` 并通过；后续 PR 必须带 baseline，main 上超阈值 0.1% 即 fail（**已知流程**，非阻断）
+- `visual` job PR 上仍 `continue-on-error: ${{ github.event_name == 'pull_request' }}`：阈值 0.1% 在多平台字体差异下可能刷出少量噪声，PR 阶段仅 warn，待多平台 baseline 稳定后再摘除（**非阻断**，与 wave6 PR-17 摘除 a11y PR 宽松策略的逻辑一致：先宽松收集基线、再收紧）
+- a11y job 已升级为合并门槛后，**禁止回退** `continue-on-error`：docs/RELEASING.md §5 已加脚注「a11y 合并门槛（PR-17 起生效）」明确提示；main 上若出现 serious/critical 必须修，不能靠宽松再过
+- `tests/ui/a11y.mjs` 修改：合同原文范围未列 `tests/ui/a11y.mjs`，但契约 (3) 明确要求保留/复述退出码语义，wave6 t1 改注释为最小无副作用落地；脚本逻辑 (`process.exit(2)` + `process.exit(N>0 ? 1 : 0)`) 未变，行为零漂移
+- `package-lock.json`（PR-18 新增）使 CI `npm ci` 可执行；本地 `npm install` 沿 workspaces 自动同步依赖；若未来 lockfile 与 `package.json` 漂移需 `npm install --package-lock-only` 重新生成（**非阻断**）
+- `pyright-baseline.json` 维持 `diagnostics=[]`；wave6 未触 Python 源码，wave3 invariant 完整
+
+**新增里程碑**：阶段 3 wave6 把 §3 长期项中的两个非阻断短板同时升级为正式质量门：① a11y 从「PR 上 warn / main 上 fail」升级为 PR + main 同等 fail-fast 的合并门槛，与 §6 WCAG AA 契约对齐；② 视觉回归首次落地为可运行 baseline 体系（Playwright 截图 + pixelmatch 0.1% 阈值 + 6 步更新流程 + CI artifact），§3 中长期悬而未决的「视觉回归」正式关闭。剩余触发条件（multi-scale batch、OpenTelemetry、`safety` 第三方依赖扫描、多 Runner 实例并发等）继续按 §3 条件按需启动。
 
 ---
 
