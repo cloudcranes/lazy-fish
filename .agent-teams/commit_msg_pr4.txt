@@ -1,0 +1,13 @@
+feat: PR-4 部署收口
+
+- requirements.txt: opencv-python → opencv-python-headless（去除 GUI 依赖）
+- requirements-dev.txt: 新增，含 pytest>=8.0
+- Dockerfile: apt 运行时依赖从 5 个包减到 2 个（libgl1 + libglib2.0-0），
+  合并 RUN 层；保留 --no-install-recommends + rm apt lists；头部注释加镜像大小估算
+- docker-compose.yml: mem_limit: 512M, cpus: 1.0（PR-3 已合并 healthcheck /api/health）
+- Makefile: 新增 dev（pip install -r requirements-dev.txt）+ format（black 若存在）
+  target；lint 改为 $(PY) 引用而非 .venv/bin/python，install 不再安装 pytest
+- ci.yml: apt 依赖减到 libgl1 + libglib2.0-0；改为安装 requirements-dev.txt；
+  cache-dependency-path 加入 requirements-dev.txt
+- release.yml: 去掉 Generate changelog excerpt 死代码（输出 BODY<<EOF 是坏的）；
+  checkout 加 fetch-depth: 0 让生成 release notes 时能拿到完整历史

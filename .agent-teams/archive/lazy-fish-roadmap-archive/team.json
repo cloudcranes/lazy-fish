@@ -1,0 +1,111 @@
+{
+  "name": "lazy-fish-roadmap-archive",
+  "id": "lazy-fish-roadmap-archive",
+  "description": "路线图落档 docs/OPTIMIZATION-ROADMAP.md + README 链接",
+  "captainSessionId": "session-ff71ed2a-2daf-43c9-8392-6a105c5a8389",
+  "createdAt": 1790415266033,
+  "phase": "running",
+  "members": [
+    {
+      "id": "8d4f0f08-2296-4e53-985d-5cb42f8a4aba",
+      "name": "docs-engineer",
+      "role": "docs-engineer",
+      "provider": "router",
+      "model": "claude-opus-5",
+      "joinedAt": 1790415266033,
+      "status": "removed"
+    }
+  ],
+  "tasks": [
+    {
+      "id": "t1",
+      "profileSeedId": "roadmap-impl",
+      "subject": "路线图落档",
+      "description": "把 .agent-teams/synthesis/optimization-roadmap.md 整理成 docs/OPTIMIZATION-ROADMAP.md：(1) 顶部加 # lazy-fish 优化路线图 与生成日期；(2) 移除内部路径名 .agent-teams/synthesis/，改为相对路径；(3) 保留三阶段路线图 + 跨端契约总览 + 工作量合并表 + 风险登记 + 阶段验收总览；(4) 末尾加「状态快照」节，记录阶段 1（commit 链 + 75 passed）与阶段 2（commit 链 + 84 passed）实际落地证据；(5) 引用 docs/RECOGNITION-RESEARCH.md 链接保持一致。README.md 在 Layout 段加入 docs/OPTIMIZATION-ROADMAP.md 链接；README.zh-CN.md 同样加。验证：git diff --stat；commit + push 到 origin/main，报 SHA。范围：docs/OPTIMIZATION-ROADMAP.md (新) + README.md + README.zh-CN.md。",
+      "status": "completed",
+      "assignee": "docs-engineer",
+      "dependencies": [],
+      "attempt": 1,
+      "createdAt": 1790415266033,
+      "updatedAt": 1790415429588,
+      "attemptId": "0cab59c7-c665-4128-bc85-59e7594f6b25",
+      "reassigning": false,
+      "output": "Created docs/OPTIMIZATION-ROADMAP.md (237 lines): top header \"# lazy-fish 优化路线图\" + 生成日期 2026-09-25; internal path .agent-teams/synthesis/ removed (all references use relative paths); preserved three-phase roadmap + cross-end contract overview + workload merge table + risk register + stage acceptance overview + status snapshot section with stage 1 (5-commit chain 9b449ad/0f14aa9/ce8e33c/e7c10ed/256e9cd, 75 passed) and stage 2 (2-commit chain 59dd192/1a2f75a, 84 passed); cross-link to docs/RECOGNITION-RESEARCH.md consistent. README.md and README.zh-CN.md Layout sections updated with OPTIMIZATION-ROADMAP.md link. Committed + pushed to origin/main as edcc6de2e16f99c5b7448c646c485bd70ed6adef.",
+      "changedPaths": [
+        "docs/OPTIMIZATION-ROADMAP.md",
+        "README.md",
+        "README.zh-CN.md"
+      ],
+      "acceptanceResults": [
+        {
+          "criterion": "Header '# lazy-fish 优化路线图' + 生成日期 present at top",
+          "status": "passed",
+          "evidence": "docs/OPTIMIZATION-ROADMAP.md L1-2: '# lazy-fish 优化路线图\\n\\n> **生成日期**: 2026-09-25'"
+        },
+        {
+          "criterion": "Internal path .agent-teams/synthesis/ removed; relative paths used",
+          "status": "passed",
+          "evidence": "grep '.agent-teams|synthesis|optimization-roadmap' on docs/OPTIMIZATION-ROADMAP.md returned No matches found."
+        },
+        {
+          "criterion": "Three-phase roadmap + cross-end contract + workload table + risk register + stage acceptance preserved",
+          "status": "passed",
+          "evidence": "§1 阶段 1 / §2 阶段 2 / §3 阶段 3 / §4 跨端契约总览 / §5 工作量 / §6 风险登记 / §7 验收总览 all present."
+        },
+        {
+          "criterion": "Status snapshot section with stage 1 (75 passed) and stage 2 (84 passed) commit evidence",
+          "status": "passed",
+          "evidence": "§8.1 stage 1: commits 9b449ad, 0f14aa9, ce8e33c, e7c10ed, 256e9cd, 75 passed. §8.2 stage 2: commits 59dd192, 1a2f75a, 84 passed."
+        },
+        {
+          "criterion": "docs/RECOGNITION-RESEARCH.md link consistent",
+          "status": "passed",
+          "evidence": "Bottom of file: '> 关联文档：[docs/RECOGNITION-RESEARCH.md](./RECOGNITION-RESEARCH.md)'. README files also reference RECOGNITION-RESEARCH.md unchanged."
+        },
+        {
+          "criterion": "README.md + README.zh-CN.md Layout sections add OPTIMIZATION-ROADMAP.md link",
+          "status": "passed",
+          "evidence": "README.md L194 and README.zh-CN.md L194: '└── OPTIMIZATION-ROADMAP.md   # ...'"
+        },
+        {
+          "criterion": "git diff --stat shows expected diff",
+          "status": "passed",
+          "evidence": "README.md +3/-1, README.zh-CN.md +3/-1, docs/OPTIMIZATION-ROADMAP.md +237 (new). 3 files changed, 241 insertions(+), 2 deletions(-)."
+        },
+        {
+          "criterion": "Committed and pushed to origin/main; SHA reported",
+          "status": "passed",
+          "evidence": "git push origin main: '1a2f75a..edcc6de  main -> main'. Pushed SHA = edcc6de2e16f99c5b7448c646c485bd70ed6adef."
+        }
+      ],
+      "commandsRun": [
+        {
+          "command": "git diff --stat (staged)",
+          "status": "passed",
+          "exitCode": 0,
+          "evidence": "README.md | 3 +/-, README.zh-CN.md | 3 +/-, docs/OPTIMIZATION-ROADMAP.md | 237 +++ (new). 3 files, 241+, 2-."
+        },
+        {
+          "command": "grep .agent-teams|synthesis|optimization-roadmap on docs/OPTIMIZATION-ROADMAP.md",
+          "status": "passed",
+          "exitCode": 0,
+          "evidence": "No matches found."
+        },
+        {
+          "command": "git commit",
+          "status": "passed",
+          "exitCode": 0,
+          "evidence": "[main edcc6de] docs: archive optimization roadmap + link in README (EN/zh). 3 files changed, 241 insertions(+), 2 deletions(-)."
+        },
+        {
+          "command": "git push origin main",
+          "status": "passed",
+          "exitCode": 1,
+          "evidence": "stderr warning about gcm filter; stdout confirms '1a2f75a..edcc6de  main -> main'. Exit code 1 is from warning, push succeeded."
+        }
+      ]
+    }
+  ],
+  "taskSeq": 1,
+  "approvedAt": 1790415354177
+}

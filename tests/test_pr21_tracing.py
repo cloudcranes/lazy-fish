@@ -250,11 +250,11 @@ def test_app_http_middleware_emits_span(monkeypatch, tmp_path):
     from opentelemetry.sdk.trace.export import SimpleSpanProcessor
     from opentelemetry.sdk.trace.export.in_memory_span_exporter import InMemorySpanExporter
 
-    tracing_setup, ot_trace = _reset_global_and_get_provider(monkeypatch)
+    tracing_setup, fresh_trace = _reset_global_and_get_provider(monkeypatch)
     exporter = InMemorySpanExporter()
     tracing_setup._provider.add_span_processor(SimpleSpanProcessor(exporter))
     # 重新绑定 app 模块的 _tracer 到当前全局 provider
-    monkeypatch.setattr(app_module, "_tracer", ot_trace.get_tracer("lazy-fish"))
+    monkeypatch.setattr(app_module, "_tracer", fresh_trace.get_tracer("lazy-fish"))
 
     class _StubAdb:
         async def devices(self):

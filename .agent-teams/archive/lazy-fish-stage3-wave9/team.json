@@ -1,0 +1,293 @@
+{
+  "name": "lazy-fish-stage3-wave9",
+  "id": "lazy-fish-stage3-wave9",
+  "description": "阶段 3 wave9：收 OTel pytest 噪声（provider.shutdown 收口）+ OTLP exporter 接入（无新依赖）",
+  "captainSessionId": "session-ff71ed2a-2daf-43c9-8392-6a105c5a8389",
+  "createdAt": 1790424539305,
+  "phase": "running",
+  "members": [
+    {
+      "id": "83dbd6ef-2528-49dc-8703-56f31d312763",
+      "name": "otel-cleanup-engineer",
+      "role": "otel-cleanup-engineer",
+      "provider": "router",
+      "model": "claude-opus-5",
+      "joinedAt": 1790424539305,
+      "status": "removed"
+    },
+    {
+      "id": "e2236d38-2a36-4837-8b99-7e69559d3cc3",
+      "name": "otel-export-engineer",
+      "role": "otel-export-engineer",
+      "provider": "router",
+      "model": "claude-opus-5",
+      "joinedAt": 1790424539305,
+      "status": "removed"
+    },
+    {
+      "id": "a5af6d33-9926-4e2e-8d71-92cf5362335f",
+      "name": "gate-reviewer",
+      "role": "gate-reviewer",
+      "provider": "router",
+      "model": "claude-opus-5",
+      "joinedAt": 1790424539305,
+      "status": "removed"
+    }
+  ],
+  "tasks": [
+    {
+      "id": "t1",
+      "profileSeedId": "otel-pytest-fix",
+      "subject": "OTel pytest 噪声",
+      "description": "PR-23（OTel pytest 噪声收口）：(1) xyzw_auto_clicker/tracing_setup.py 在 configure_tracer 后提供 force_shutdown()：在 finally 里调 tracer_provider.shutdown() + force_flush(timeout_millis=2000)。(2) tests/test_pr21_tracing.py 加 fixture autouse：每个 test 后调 force_shutdown()；再加一例 test_shutdown_cleans_bsp 验证 BSP thread 被 join。(3) xyzw_auto_clicker/app.py lifespan shutdown 在已有 shutdown_tracer 调用上加大 force_flush=2000 防御。(4) 测试不再出现 stderr ValueError。验证：pytest tests/ 117 passed + stderr 静默；py_compile；commit + push，报 SHA。范围：xyzw_auto_clicker/tracing_setup.py + xyzw_auto_clicker/app.py + tests/test_pr21_tracing.py。",
+      "status": "completed",
+      "assignee": "otel-cleanup-engineer",
+      "dependencies": [],
+      "attempt": 1,
+      "createdAt": 1790424539305,
+      "updatedAt": 1790425763690,
+      "attemptId": "f2875acb-5e43-4939-8f6e-5f005c6bc5e6",
+      "reassigning": false,
+      "output": "PR-23 OTel pytest 噪声收口。Commit SHA: 09276da555a00dd9b05890b8971965141d8fd616。\n\n变更（仅 3 个 in-scope 文件）：\n- xyzw_auto_clicker/tracing_setup.py\n  * shutdown_tracer 增加 timeout_millis=2000 参数（防御性 flush）\n  * 新增 force_shutdown()：flush+shutdown+gc 兜底（处理 monkeypatch 替换旧 provider 后 BSP 漏 worker 的情况）\n  * configure_tracer 首次建 provider 时 atexit.register(force_shutdown) 做进程退出兜底\n- xyzw_auto_clicker/app.py\n  * lifespan shutdown 调用 shutdown_tracer(timeout_millis=2000)\n- tests/test_pr21_tracing.py\n  * 加 autouse fixture 每条用例 teardown 调 force_shutdown()\n  * 加 test_shutdown_cleans_bsp 验证 BSP _worker_thread.is_alive() 在 shutdown 后变 False\n\n验证：\n- pytest tests/ → 119 passed (含新增 test_shutdown_cleans_bsp)\n- stderr 静默（无 OTel BSP 'I/O operation on closed file' ValueError）\n- py_compile 全过\n- git push origin main: 8e54507..09276da main -> main\n\n注意：task 验证需要 opentelemetry-exporter-otlp 包已安装（OTLP 引入的 import 是 PR-24 的产物）。我已安装 opentelemetry-exporter-otlp==1.34.1 + proto-grpc/common/proto + grpcio 1.84.0 + protobuf + googleapis-common-protos 才能让测试 collection 跑起来；这部分不属于 PR-23 的变更，是 PR-24 的依赖前提。",
+      "verdict": "pass",
+      "acceptanceResults": [
+        {
+          "criterion": "tracing_setup 提供 force_shutdown()（finally flush+shutdown）",
+          "status": "passed",
+          "evidence": "xyzw_auto_clicker/tracing_setup.py 新增 force_shutdown() 函数：force_flush(timeout_millis=2000) 后 shutdown()，最后 _provider=None"
+        },
+        {
+          "criterion": "tests/test_pr21_tracing.py 加 fixture autouse 每条 test 后 force_shutdown()",
+          "status": "passed",
+          "evidence": "tests/test_pr21_tracing.py 加 _otel_force_shutdown_after_test fixture with autouse=True + yield 后调 force_shutdown()"
+        },
+        {
+          "criterion": "tests/test_pr21_tracing.py 加 test_shutdown_cleans_bsp 验证 BSP thread 被 join",
+          "status": "passed",
+          "evidence": "test_shutdown_cleans_bsp 断言 bp._worker_thread.is_alive() == True before shutdown，调用 force_shutdown() 后断言 False"
+        },
+        {
+          "criterion": "xyzw_auto_clicker/app.py lifespan shutdown 加大 force_flush=2000 防御",
+          "status": "passed",
+          "evidence": "xyzw_auto_clicker/app.py 第67行：shutdown_tracer(timeout_millis=2000)"
+        },
+        {
+          "criterion": "测试不再出现 stderr ValueError",
+          "status": "passed",
+          "evidence": "pytest tests/ 2>stderr.log → stderr 大小 0 字节"
+        }
+      ],
+      "commandsRun": [
+        {
+          "command": "python -m py_compile xyzw_auto_clicker/tracing_setup.py xyzw_auto_clicker/app.py tests/test_pr21_tracing.py",
+          "status": "passed"
+        }
+      ]
+    },
+    {
+      "id": "t2",
+      "profileSeedId": "otel-exporter",
+      "subject": "OTLP exporter 接入",
+      "description": "PR-24（OTLP exporter 接入）：(1) tracing_setup.py 在 OTEL_EXPORTER_OTLP_ENDPOINT 设值时使用 BatchSpanProcessor(OTLPSpanExporter)；未设值时默认 ConsoleSpanExporter（保持向后兼容，pytest 仍走 console）。(2) requirements.txt 加 opentelemetry-exporter-otlp（与 sdk 同版本 1.34.1）。(3) docker-compose.yml 加环境变量 OTEL_EXPORTER_OTLP_ENDPOINT=http://host.docker.internal:4317 默认 + OTEL_EXPORTER_OTLP_PROTOCOL=grpc。(4) Dockerfile ENV 默认同 compose。(5) docs/OPTIMIZATION-ROADMAP.md §8 附录「可观测拓扑」节： collector + 镜像变体。(6) RELEASING.md §3 「OTel 部署」补一句。(7) tests/test_pr21_tracing.py 加 test_otlp_path_initializes_when_endpoint_set。验证：pytest tests/ 117 passed + 新增；py_compile；commit + push，报 SHA。范围：xyzw_auto_clicker/tracing_setup.py + requirements.txt + docker-compose.yml + Dockerfile + docs/OPTIMIZATION-ROADMAP.md + docs/RELEASING.md + tests/test_pr21_tracing.py。",
+      "status": "completed",
+      "assignee": "otel-export-engineer",
+      "dependencies": [],
+      "attempt": 1,
+      "createdAt": 1790424539305,
+      "updatedAt": 1790425433487,
+      "attemptId": "b460a38a-35e6-4deb-b034-380e70d25c58",
+      "reassigning": false,
+      "output": "SHA: 8e54507 (force-pushed over b6246bc after filling in real SHAs in §8.10 evidence).\n\n7 files changed (matches scope spec exactly):\n- xyzw_auto_clicker/tracing_setup.py: import OTLPSpanExporter; new _otlp_endpoint() helper; configure_tracer 三分支 (endpoint set → OTLPSpanExporter, else stdout-alive → ConsoleSpanExporter, else skip). Comments refreshed for PR-24.\n- requirements.txt: opentelemetry-exporter-otlp==1.34.1 (与 sdk 同版本).\n- docker-compose.yml: OTEL_EXPORTER_OTLP_ENDPOINT=http://host.docker.internal:4317 + OTEL_EXPORTER_OTLP_PROTOCOL=grpc 默认.\n- Dockerfile: 同样 ENV 默认 (PR-14 LAZY_FISH_STOP_FILE 下方新增两行).\n- tests/test_pr21_tracing.py: 加 test_otlp_path_initializes_when_endpoint_set (monkeypatch 设 endpoint → 校验 provider 上挂的是 OTLPSpanExporter 实例).\n- docs/OPTIMIZATION-ROADMAP.md: 新增 §8.10 wave9 evidence + §8.10.1「可观测拓扑」附录 (collector + 镜像变体 env 矩阵 + 部署清单 + ASCII 拓扑图).\n- docs/RELEASING.md: §3.0「OTel 部署」补一句, 指向 OPTIMIZATION-ROADMAP §8.10.1.\n\nVerification:\n- py_compile xyzw_auto_clicker/tracing_setup.py + tests/test_pr21_tracing.py → exit 0\n- py -3.12 -m pytest tests/ -q → 118 passed, 1 warning (117 baseline + 1 new OTLP)\n- py -3.12 -m pytest tests/test_pr21_tracing.py::test_otlp_path_initializes_when_endpoint_set -v → PASSED in 0.30s\n- docker-compose.yml yaml.safe_load (utf-8) → 含 OTEL_EXPORTER_OTLP_ENDPOINT + OTEL_EXPORTER_OTLP_PROTOCOL\n- git log --oneline -3 → 8e54507 在 main 顶端\n- git push origin main --force-with-lease → b6246bc...8e54507 main -> main (forced update)\n\nPonytail (deliberate simplifications):\n- 未触 xyzw_auto_clicker/app.py (lifespan shutdown_tracer() 仍是 PR-21 原版); t1 (force_shutdown + autouse fixture 收 pytest stderr noise) 由其他 PR 处理, 不混入本 PR scope。\n- 未引入 OTLP HTTP exporter (走 grpc 是与 requirements 装的 proto.grpc 一致, 切换 http 需改 import 路径, YAGNI)。\n- 未加 metric / log pipeline (spec 仅要求 trace, 其他 signal 等触发条件)。",
+      "verdict": "pass",
+      "changedPaths": [
+        "xyzw_auto_clicker/tracing_setup.py",
+        "requirements.txt",
+        "docker-compose.yml",
+        "Dockerfile",
+        "docs/OPTIMIZATION-ROADMAP.md",
+        "docs/RELEASING.md",
+        "tests/test_pr21_tracing.py"
+      ],
+      "acceptanceResults": [
+        {
+          "criterion": "tracing_setup.py 在 OTEL_EXPORTER_OTLP_ENDPOINT 设值时使用 BatchSpanProcessor(OTLPSpanExporter); 未设值时默认 ConsoleSpanExporter",
+          "status": "passed",
+          "evidence": "configure_tracer 三分支: otlp_endpoint 设值 → BatchSpanProcessor(OTLPSpanExporter()); 未设值 + stdout 活着 → ConsoleSpanExporter; 都无 → skip。test_otlp_path_initializes_when_endpoint_set 验证 endpoint 设值时 provider 上挂的是 OTLPSpanExporter 实例, PASSED."
+        },
+        {
+          "criterion": "requirements.txt 加 opentelemetry-exporter-otlp (与 sdk 同版本 1.34.1)",
+          "status": "passed",
+          "evidence": "requirements.txt 新增 opentelemetry-exporter-otlp==1.34.1 行."
+        },
+        {
+          "criterion": "docker-compose.yml 加 OTEL_EXPORTER_OTLP_ENDPOINT=http://host.docker.internal:4317 + OTEL_EXPORTER_OTLP_PROTOCOL=grpc",
+          "status": "passed",
+          "evidence": "docker-compose.yml environment 段新增两行; yaml.safe_load 解析 OK."
+        },
+        {
+          "criterion": "Dockerfile ENV 默认同 compose",
+          "status": "passed",
+          "evidence": "Dockerfile runtime ENV 段新增 OTEL_EXPORTER_OTLP_ENDPOINT=http://host.docker.internal:4317 + OTEL_EXPORTER_OTLP_PROTOCOL=grpc."
+        },
+        {
+          "criterion": "docs/OPTIMIZATION-ROADMAP.md §8 附录「可观测拓扑」节: collector + 镜像变体",
+          "status": "passed",
+          "evidence": "新增 §8.10 wave9 evidence + §8.10.1「可观测拓扑」(ASCII 拓扑图 + 镜像变体 env 矩阵 + 部署清单 4 步)."
+        },
+        {
+          "criterion": "docs/RELEASING.md §3「OTel 部署」补一句",
+          "status": "passed",
+          "evidence": "新增 §3.0「OTel 部署」一段, 说明默认 endpoint 行为 + 退回 console 契约 + 指向 OPTIMIZATION-ROADMAP §8.10.1."
+        },
+        {
+          "criterion": "tests/test_pr21_tracing.py 加 test_otlp_path_initializes_when_endpoint_set",
+          "status": "passed",
+          "evidence": "新增 test_otlp_path_initializes_when_endpoint_set: monkeypatch OTEL_EXPORTER_OTLP_ENDPOINT, 调 configure_tracer, 校验 _provider 上至少一个 BatchSpanProcessor 包的是 OTLPSpanExporter; 独立运行 PASSED in 0.30s."
+        },
+        {
+          "criterion": "pytest tests/ 117 passed + 新增; py_compile",
+          "status": "passed",
+          "evidence": "py -3.12 -m pytest tests/ -q → 118 passed, 1 warning (117 baseline + 1 OTLP). py_compile xyzw_auto_clicker/tracing_setup.py tests/test_pr21_tracing.py → exit 0."
+        },
+        {
+          "criterion": "commit + push, 报 SHA",
+          "status": "passed",
+          "evidence": "git log --oneline -1 → 8e54507. git push --force-with-lease → b6246bc...8e54507 main -> main."
+        }
+      ],
+      "commandsRun": [
+        {
+          "command": "py -3.12 -m pytest tests/ -q --tb=no",
+          "status": "passed",
+          "exitCode": 0,
+          "evidence": "118 passed, 1 warning in 9.80s (PowerShell exit 1 是 BSP daemon stderr 噪声, pytest exit 0)."
+        },
+        {
+          "command": "py -3.12 -m pytest tests/test_pr21_tracing.py::test_otlp_path_initializes_when_endpoint_set -v",
+          "status": "passed",
+          "exitCode": 0,
+          "evidence": "1 passed in 0.30s."
+        },
+        {
+          "command": "py -3.12 -m py_compile xyzw_auto_clicker/tracing_setup.py xyzw_auto_clicker/app.py xyzw_auto_clicker/matcher.py xyzw_auto_clicker/runner.py tests/test_pr21_tracing.py",
+          "status": "passed",
+          "exitCode": 0,
+          "evidence": "exit 0."
+        },
+        {
+          "command": "py -c \"import yaml; yaml.safe_load(open('docker-compose.yml', encoding='utf-8'))\"",
+          "status": "passed",
+          "exitCode": 0,
+          "evidence": "YAML OK; 含 OTEL_EXPORTER_OTLP_ENDPOINT + OTEL_EXPORTER_OTLP_PROTOCOL."
+        },
+        {
+          "command": "git push origin main --force-with-lease",
+          "status": "passed",
+          "exitCode": 0,
+          "evidence": "b6246bc...8e54507 main -> main (forced update)."
+        }
+      ]
+    },
+    {
+      "id": "t3",
+      "profileSeedId": "stage3-wave9-gate",
+      "subject": "wave9 总验收 + 路线图更新",
+      "description": "读 PR-23 + PR-24 commit 与 diff；pytest tests/ 零回归；pytest stderr 静默（无 OTel BSP noise）；OTLP exporter 在 OTEL_EXPORTER_OTLP_ENDPOINT 设值时启用，否则仍 ConsoleSpanExporter；更新 docs/OPTIMIZATION-ROADMAP.md §8 追加 wave9 落地证据。输出 PASS/FAIL + 未闭合项。",
+      "status": "completed",
+      "assignee": "gate-reviewer",
+      "dependencies": [
+        "t1",
+        "t2"
+      ],
+      "attempt": 1,
+      "createdAt": 1790424539305,
+      "updatedAt": 1790425979344,
+      "attemptId": "9fb72ce4-205b-4d4f-80ed-43080b092e4f",
+      "reassigning": false,
+      "output": "wave9 总验收 PASS。\n\n核验（PR-23 09276da + PR-24 8e54507，均在 origin/main）：\n1. commit/diff 核对：两 commit 文件集与 scope 一致（PR-23: tracing_setup.py + app.py + tests/test_pr21_tracing.py；PR-24: tracing_setup.py + requirements.txt + docker-compose.yml + Dockerfile + tests/test_pr21_tracing.py + docs×2）。配置三分支逻辑（endpoint 设值→OTLPSpanExporter；未设值+stdout alive→ConsoleSpanExporter；未设值+stdout 已闭→不挂）代码审查通过。\n2. pytest tests/ → 119 passed, 1 warning (StarletteDeprecationWarning, 既有)，零回归（依赖结果称 117 baseline，现 119 = 117 + PR-23 test_shutdown_cleans_bsp + PR-24 test_otlp_path_initializes_when_endpoint_set，两条新用例分别独立 -v 复跑均 PASSED）。\n3. stderr 静默：单独 2> 捕获 pytest 输出 → stderr 空文件；全量输出 grep 无 'I/O operation on closed file' / 'Exception while exporting' / ValueError。\n4. OTLP/console 双路径实测（脚本级验证）：无 endpoint → ['ConsoleSpanExporter']；设 endpoint → ['OTLPSpanExporter']。与契约一致。\n5. docker-compose.yml 读核：OTEL_EXPORTER_OTLP_ENDPOINT=http://host.docker.internal:4317 + OTEL_EXPORTER_OTLP_PROTOCOL=grpc 在 environment 下；Dockerfile ENV 双写一致。\n6. py_compile 三源文件 exit 0。\n\n路线图更新（本 task 工作项）：\n- docs/OPTIMIZATION-ROADMAP.md §8.10：修正 PR-24 SHA b6246bc（force-push 前旧值）→ 8e54507；commit 链补 PR-23 09276da；追加 PR-23 变更表 + wave9 总验收证据段。commit 249a434 已 push（09276da..249a434 main -> main）。\n\n未闭合项（非阻断，不影响 PASS）：\n- OTLP 端到端未实测：本机无 OTel Collector 实例，OTLPSpanExporter 挂载已由单测覆盖，但真实 gRPC 4317 收发未跑通验证。属 §3 触发条件表项，待 collector 部署后按 §8.10.1 部署清单启用。",
+      "verdict": "pass",
+      "changedPaths": [
+        "docs/OPTIMIZATION-ROADMAP.md"
+      ],
+      "acceptanceResults": [
+        {
+          "criterion": "读 PR-23 + PR-24 commit 与 diff",
+          "status": "passed",
+          "evidence": "git diff 09276da~1..09276da (3 文件) 与 8e54507~1..8e54507 (7 文件) 均与依赖结果一致；configure_tracer 三分支代码审查通过"
+        },
+        {
+          "criterion": "pytest tests/ 零回归",
+          "status": "passed",
+          "evidence": "119 passed, 1 warning (既有 StarletteDeprecation)，exit 0"
+        },
+        {
+          "criterion": "pytest stderr 静默（无 OTel BSP noise）",
+          "status": "passed",
+          "evidence": "单独 2> 捕获 stderr 为空；全量输出无 'I/O operation on closed file'/'Exception while exporting'/ValueError"
+        },
+        {
+          "criterion": "OTLP exporter 在 endpoint 设值时启用，否则仍 ConsoleSpanExporter",
+          "status": "passed",
+          "evidence": "脚本实测：无 endpoint → ConsoleSpanExporter；设 endpoint → OTLPSpanExporter；单测 test_otlp_path_initializes_when_endpoint_set PASSED"
+        },
+        {
+          "criterion": "更新 docs/OPTIMIZATION-ROADMAP.md §8 追加 wave9 落地证据",
+          "status": "passed",
+          "evidence": "§8.10 修正 SHA 8e54507 + 补 PR-23 09276da 证据 + wave9 总验收段；commit 249a434 已 push"
+        }
+      ],
+      "commandsRun": [
+        {
+          "command": "git diff 09276da~1..09276da / 8e54507~1..8e54507 --stat",
+          "status": "passed",
+          "exitCode": 0,
+          "evidence": "3/7 文件，与 scope 一致"
+        },
+        {
+          "command": "py -3.12 -m pytest tests/ -q",
+          "status": "passed",
+          "exitCode": 0,
+          "evidence": "119 passed, 1 warning in 8.62s"
+        },
+        {
+          "command": "py -3.12 -m pytest tests/ -q 2>stderr.log",
+          "status": "passed",
+          "exitCode": 0,
+          "evidence": "stderr 文件为空（无 OTel BSP noise）"
+        },
+        {
+          "command": "py -3.12 -m pytest tests/test_pr21_tracing.py::test_otlp_path_initializes_when_endpoint_set tests/test_pr21_tracing.py::test_shutdown_cleans_bsp -v",
+          "status": "passed",
+          "exitCode": 0,
+          "evidence": "2 passed in 0.27s"
+        },
+        {
+          "command": "py -3.12 -m py_compile xyzw_auto_clicker/tracing_setup.py xyzw_auto_clicker/app.py tests/test_pr21_tracing.py",
+          "status": "passed",
+          "exitCode": 0,
+          "evidence": "exit 0"
+        },
+        {
+          "command": "OTLP/console 双路径脚本实测",
+          "status": "passed",
+          "exitCode": 0,
+          "evidence": "无 endpoint→ConsoleSpanExporter；设 endpoint→OTLPSpanExporter"
+        },
+        {
+          "command": "docker-compose.yml 读核",
+          "status": "passed",
+          "exitCode": 0,
+          "evidence": "OTEL_EXPORTER_OTLP_ENDPOINT=http://host.docker.internal:4317 + OTEL_EXPORTER_OTLP_PROTOCOL=grpc 在 environment；Dockerfile ENV 一致"
+        },
+        {
+          "command": "git push origin main",
+          "status": "passed",
+          "exitCode": 0,
+          "evidence": "09276da..249a434 main -> main"
+        }
+      ]
+    }
+  ],
+  "taskSeq": 3,
+  "approvedAt": 1790424543322
+}

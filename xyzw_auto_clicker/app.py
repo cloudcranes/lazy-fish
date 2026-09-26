@@ -170,7 +170,9 @@ async def take_screenshot(payload: dict[str, str | None] | None = None) -> dict[
 
 @app.get("/api/screenshots/latest.png")
 async def get_latest_screenshot() -> FileResponse:
-    path = (runner.get(None) if isinstance(runner, RunnerRegistry) else runner).state.last_screenshot
+    path = (
+        runner.get(None) if isinstance(runner, RunnerRegistry) else runner
+    ).state.last_screenshot
     if not path or not path.exists():
         raise HTTPException(status_code=404, detail="暂未采集到截图")
     return FileResponse(path, media_type="image/png")
@@ -388,19 +390,24 @@ def _render_prometheus(snapshot: dict[str, object]) -> str:
     ponytail: 字符串里出现的 \\ 与 \\n 是 Prometheus 转义规则；这里只输出整数 / 浮点 /
     受控枚举，不带引号字符串，省去转义。
     """
+    last_mtime = snapshot.get("last_screenshot_mtime")
     lines: list[str] = [
         "# HELP lazy_fish_uptime_seconds 进程启动到现在的秒数（容器视角存活时间）。",
         "# TYPE lazy_fish_uptime_seconds gauge",
         f"lazy_fish_uptime_seconds {snapshot['uptime_seconds']}",
-        "# HELP lazy_fish_process_resident_memory_bytes 进程 RSS 字节数；非 Linux 降级返回 0。",
+        "# HELP lazy_fish_process_resident_memory_bytes "
+        "进程 RSS 字节数；非 Linux 降级返回 0。",
         "# TYPE lazy_fish_process_resident_memory_bytes gauge",
         f"lazy_fish_process_resident_memory_bytes {snapshot['process_resident_memory_bytes']}",
-        "# HELP lazy_fish_runner_status Runner 当前状态：idle/starting/running/paused/stopped/done/error。",
+        "# HELP lazy_fish_runner_status Runner 当前状态："
+        "idle/starting/running/paused/stopped/done/error。",
         "# TYPE lazy_fish_runner_status gauge",
         f"lazy_fish_runner_status {snapshot['runner_status']}",
-        "# HELP lazy_fish_last_screenshot_mtime_seconds 最近一次截图 mtime；未截图时 0。",
+        "# HELP lazy_fish_last_screenshot_mtime_seconds "
+        "最近一次截图 mtime；未截图时 0。",
         "# TYPE lazy_fish_last_screenshot_mtime_seconds gauge",
-        f"lazy_fish_last_screenshot_mtime_seconds {snapshot['last_screenshot_mtime'] if snapshot['last_screenshot_mtime'] is not None else 0}",
+        "lazy_fish_last_screenshot_mtime_seconds "
+        f"{last_mtime if last_mtime is not None else 0}",
         "# HELP lazy_fish_tasks_started_total 累计启动的任务次数。",
         "# TYPE lazy_fish_tasks_started_total counter",
         f"lazy_fish_tasks_started_total {snapshot['tasks_started_total']}",

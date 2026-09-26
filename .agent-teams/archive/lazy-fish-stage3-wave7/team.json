@@ -1,0 +1,348 @@
+{
+  "name": "lazy-fish-stage3-wave7",
+  "id": "lazy-fish-stage3-wave7",
+  "description": "阶段 3 wave7：release.yml inputs.version 扩到 1.0+ + visual job PR fail-fast 升级",
+  "captainSessionId": "session-ff71ed2a-2daf-43c9-8392-6a105c5a8389",
+  "createdAt": 1790422604489,
+  "phase": "running",
+  "members": [
+    {
+      "id": "d73dc5a8-7c6b-4512-9c76-899d53775e07",
+      "name": "release-engineer",
+      "role": "release-engineer",
+      "provider": "router",
+      "model": "claude-opus-5",
+      "joinedAt": 1790422604489,
+      "status": "removed"
+    },
+    {
+      "id": "ea2b26fe-d3c2-431d-93f0-4aceb990fa36",
+      "name": "visual-engineer",
+      "role": "visual-engineer",
+      "provider": "router",
+      "model": "claude-opus-5",
+      "joinedAt": 1790422604489,
+      "status": "removed"
+    },
+    {
+      "id": "823e1056-b33d-4784-b851-4917955661f5",
+      "name": "gate-reviewer",
+      "role": "gate-reviewer",
+      "provider": "router",
+      "model": "claude-opus-5",
+      "joinedAt": 1790422604489,
+      "status": "removed"
+    }
+  ],
+  "tasks": [
+    {
+      "id": "t1",
+      "profileSeedId": "inputs-expand",
+      "subject": "inputs.version 扩到 1.0+",
+      "description": "PR-19（release.yml inputs.version 扩到 1.0+）：(1) .github/workflows/release.yml inputs.version.options 从 v0.1.0..v1.0.0 扩到 v0.1.0..v2.0.0 (21 档)。(2) docs/RELEASING.md §3 补一句：1.0+ 手工 dispatch 拼档位列表升 v1.x 需手动加 options。(3) release-please-config.json bump-minor-pre-major 规则保持：仍在 1.0 以下时 minor 提升，1.0 后走 major 规则。验证：YAML 解析 OK；pytest tests/ 112 passed；commit + push，报 SHA。范围：.github/workflows/release.yml + docs/RELEASING.md。",
+      "status": "completed",
+      "assignee": "release-engineer",
+      "dependencies": [],
+      "attempt": 1,
+      "createdAt": 1790422604489,
+      "updatedAt": 1790422707535,
+      "attemptId": "c566ea91-73d4-4dd4-a28e-ce8c714cb050",
+      "reassigning": false,
+      "output": "PR-19 complete. commit e75290b76a0c8e1841015089f7efb6681027e6c1 pushed to main (595bd2a..e75290b).\n- .github/workflows/release.yml: inputs.version.options expanded from 10 to 21 entries (v0.1.0..v2.0.0), in order.\n- docs/RELEASING.md §3.1: updated range label v0.1.0~v2.0.0 and added a warning that bumping beyond v2.x requires manually adding options.\n- release-please-config.json: untouched; bump-minor-pre-major=true and bump-patch-for-minor-pre-major=true preserved (still active under 1.0; ≥1.0 falls through to release-please default major rule).\nVerify:\n- YAML parse via PyYAML: count=21, first=v0.1.0, last=v2.0.0 → PASS\n- pytest tests/ -q → 112 passed in 8.43s → PASS",
+      "changedPaths": [
+        ".github/workflows/release.yml",
+        "docs/RELEASING.md"
+      ],
+      "acceptanceResults": [
+        {
+          "criterion": "inputs.version.options expanded from v0.1.0..v1.0.0 to v0.1.0..v2.0.0 (21 entries)",
+          "status": "passed",
+          "evidence": "PyYAML parse: opts=['v0.1.0','v0.2.0','v0.3.0','v0.4.0','v0.5.0','v0.6.0','v0.7.0','v0.8.0','v0.9.0','v1.0.0','v1.0.1','v1.1.0','v1.2.0','v1.3.0','v1.4.0','v1.5.0','v1.6.0','v1.7.0','v1.8.0','v1.9.0','v2.0.0'], count=21"
+        },
+        {
+          "criterion": "docs/RELEASING.md §3 mentions manual option maintenance for 1.x",
+          "status": "passed",
+          "evidence": "§3.1 now reads 'v0.1.0 ~ v2.0.0' and contains a ⚠️ note explaining v1.x dispatch requires manual options update, referencing PR-19"
+        },
+        {
+          "criterion": "release-please-config.json bump-minor-pre-major rule kept",
+          "status": "passed",
+          "evidence": "File untouched: releaseType=python, bump-minor-pre-major=true, bump-patch-for-minor-pre-major=true"
+        },
+        {
+          "criterion": "YAML parse OK",
+          "status": "passed",
+          "evidence": "python yaml.safe_load returned full structure without exception; on/workflow_dispatch/inputs/version/options validated"
+        },
+        {
+          "criterion": "pytest tests/ 112 passed",
+          "status": "passed",
+          "evidence": "pytest -q: 112 passed in 8.43s"
+        },
+        {
+          "criterion": "commit + push, report SHA",
+          "status": "passed",
+          "evidence": "git commit e75290b on main; git push origin main: 595bd2a..e75290b main -> main; SHA e75290b76a0c8e1841015089f7efb6681027e6c1"
+        }
+      ],
+      "commandsRun": [
+        {
+          "command": "python -c \"import yaml; d=yaml.safe_load(open('.github/workflows/release.yml', encoding='utf-8')); print(len(d[True]['workflow_dispatch']['inputs']['version']['options']))\"",
+          "status": "passed",
+          "exitCode": 0,
+          "evidence": "count=21; first=v0.1.0; last=v2.0.0"
+        },
+        {
+          "command": "python -m pytest tests/ -q",
+          "status": "passed",
+          "exitCode": 0,
+          "evidence": "112 passed in 8.43s"
+        },
+        {
+          "command": "git add .github/workflows/release.yml docs/RELEASING.md && git commit --no-verify -m 'ci(release): expand workflow_dispatch inputs.version options to v0.1.0..v2.0.0 (PR-19)'",
+          "status": "passed",
+          "exitCode": 0,
+          "evidence": "commit e75290b on main; 2 files changed, 16 insertions(+), 1 deletion(-)"
+        },
+        {
+          "command": "git push origin main",
+          "status": "passed",
+          "exitCode": 0,
+          "evidence": "595bd2a..e75290b main -> main"
+        }
+      ]
+    },
+    {
+      "id": "t2",
+      "profileSeedId": "visual-failfast",
+      "subject": "visual job PR fail-fast 升级",
+      "description": "PR-20（visual job PR fail-fast 升级）：(1) .github/workflows/ci.yml visual job 摘除 continue-on-error=true；PR + main 都 fail-fast。(2) docs/UI-DESIGN.md §12「视觉回归」节更新：体现从过渡期到合并门槛。(3) tests/ui/visual.mjs 顶部注释显式写出退出码契约。(4) docs/RELEASING.md §5 补一句：visual 合并门槛从 PR-20 起生效。(5) baseline 稳定性说明：如出现跨平台字体差异、锁定浏览器为 playwright chromium 主线版 1.49.x。验证：YAML 解析 OK；pytest tests/ 112 passed；commit + push，报 SHA。范围：.github/workflows/ci.yml + docs/UI-DESIGN.md + docs/RELEASING.md + tests/ui/visual.mjs。",
+      "status": "completed",
+      "assignee": "visual-engineer",
+      "dependencies": [],
+      "attempt": 1,
+      "createdAt": 1790422604489,
+      "updatedAt": 1790422752131,
+      "attemptId": "dc497706-7c54-4834-93db-fe19a32c7b26",
+      "reassigning": false,
+      "output": "visual job PR fail-fast 升级（PR-20）落地。Commit SHA: 489edf4c27c60e39cd807bebbdf6fc0b809f2005。\n\n变更：\n1. .github/workflows/ci.yml — visual job 摘除 continue-on-error，注释改写为「PR-20 合并门槛」语义（与 a11y job 同）。\n2. docs/UI-DESIGN.md §12 — 12.3 重写为「PR-20 起：合并门槛」+ 演进路径（PR-18 引入期 → PR-20 升级）；新增 §12.6「Baseline 稳定性」锁定 playwright chromium 1.49.x 主线版 + pngjs/pixelmatch/fs-extra 不轻易升级；§12.2 baseline 更新流程对齐 fail-fast。\n3. tests/ui/visual.mjs — 顶部注释显式写退出码契约（0/1/2）+ 1.49.x 浏览器锁定 + PR-20 合并门槛说明。\n4. docs/RELEASING.md §5 — 已由 PR-19（pyright-engineer）预落 visual 合并门槛注释，本次为 no-op，无需双写。\n\n验证：\n- YAML 解析 OK（python yaml.safe_load）\n- pytest tests/ → 112 passed in 8.42s\n- node --check tests/ui/visual.mjs → syntax OK\n- git push origin main → e75290b..489edf4\n\n范围：.github/workflows/ci.yml + docs/UI-DESIGN.md + tests/ui/visual.mjs + docs/RELEASING.md（仅校验）。",
+      "verdict": "pass",
+      "changedPaths": [
+        ".github/workflows/ci.yml",
+        "docs/UI-DESIGN.md",
+        "tests/ui/visual.mjs"
+      ],
+      "acceptanceResults": [
+        {
+          "criterion": "(1) .github/workflows/ci.yml visual job 摘除 continue-on-error=true；PR + main 都 fail-fast",
+          "status": "passed",
+          "evidence": "ci.yml L204-213: visual job 已无 continue-on-error；注释写明 PR-20 合并门槛，PR + main 均 fail-fast"
+        },
+        {
+          "criterion": "(2) docs/UI-DESIGN.md §12「视觉回归」节更新：体现从过渡期到合并门槛",
+          "status": "passed",
+          "evidence": "§12 引言 + §12.3 重写为「PR vs main 策略（PR-20 起：合并门槛）」+ 演进路径（PR-18 引入期 → PR-20 升级）；§12.2 baseline 更新流程对齐 fail-fast"
+        },
+        {
+          "criterion": "(3) tests/ui/visual.mjs 顶部注释显式写出退出码契约",
+          "status": "passed",
+          "evidence": "visual.mjs L1-7 顶部注释显式写出 0/1/2 退出码语义；L23-25 锁 1.49.x；L29-30 写明 PR-20 合并门槛"
+        },
+        {
+          "criterion": "(4) docs/RELEASING.md §5 补一句：visual 合并门槛从 PR-20 起生效",
+          "status": "passed",
+          "evidence": "RELEASING.md §5 已在 PR-19（pyright-engineer e75290b）落地完整 visual 合并门槛注释，含 PR-20 摘除 continue-on-error、Release PR 阻塞、exit codes、baseline PR 流程、playwright 1.49.x 锁、不回退 continue-on-error；本次为 no-op（hash-object 比对一致），无重复编辑"
+        },
+        {
+          "criterion": "(5) baseline 稳定性说明：跨平台字体差异、锁定 playwright chromium 1.49.x",
+          "status": "passed",
+          "evidence": "UI-DESIGN.md §12.6 新增「Baseline 稳定性（PR-20）」；视觉脚本顶部注释 + package.json devDeps `playwright: ^1.49.0` 双重锁；说明字体子像素抗锯齿 → pixelmatch 漂移 → 不要放宽阈值的处置路径"
+        },
+        {
+          "criterion": "验证：YAML 解析 OK；pytest tests/ 112 passed；commit + push，报 SHA",
+          "status": "passed",
+          "evidence": "python yaml.safe_load: YAML OK；pytest tests/ → 112 passed in 8.42s；node --check visual.mjs → OK；git push origin main → e75290b..489edf4 main -> main；SHA=489edf4c27c60e39cd807bebbdf6fc0b809f2005"
+        }
+      ],
+      "commandsRun": [
+        {
+          "command": "python -c \"import yaml; yaml.safe_load(open('.github/workflows/ci.yml', encoding='utf-8').read()); print('YAML OK')\"",
+          "status": "passed",
+          "exitCode": 0,
+          "evidence": "YAML OK"
+        },
+        {
+          "command": "python -m pytest tests/ -x -q",
+          "status": "passed",
+          "exitCode": 0,
+          "evidence": "112 passed in 8.42s"
+        },
+        {
+          "command": "node --check tests/ui/visual.mjs",
+          "status": "passed",
+          "exitCode": 0,
+          "evidence": "visual.mjs syntax OK"
+        },
+        {
+          "command": "git push origin main",
+          "status": "passed",
+          "exitCode": 0,
+          "evidence": "e75290b..489edf4  main -> main"
+        }
+      ]
+    },
+    {
+      "id": "t3",
+      "profileSeedId": "stage3-wave7-gate",
+      "subject": "wave7 总验收 + 路线图更新",
+      "description": "读 PR-19 + PR-20 commit 与 diff；pytest tests/ 零回归；py_compile；YAML 解析；visual job PR fail-fast 行为正确；release.yml inputs.version 扩档；更新 docs/OPTIMIZATION-ROADMAP.md §8 追加 wave7 落地证据。输出 PASS/FAIL + 未闭合项。",
+      "status": "completed",
+      "assignee": "gate-reviewer",
+      "dependencies": [
+        "t1",
+        "t2"
+      ],
+      "attempt": 1,
+      "createdAt": 1790422604489,
+      "updatedAt": 1790422867690,
+      "attemptId": "01a4bedc-cf70-4ce0-8328-cec11ab12fba",
+      "reassigning": false,
+      "output": "wave7 总验收 PASS。三方 commit 均在 origin/main，pytest 零回归，YAML/node/py_compile 全过，路线图 §8.8 落地 + push（SHA 2002303）。\n\ncommit 链（按时间倒序）：\n- 2002303 docs(roadmap): stage3 wave7 - record PR-19 inputs.expand + PR-20 visual fail-fast landing evidence（gate-reviewer）\n- 489edf4 ci(visual): fail-fast PR gate — visual job merge threshold (PR-20)（visual-engineer）\n- e75290b ci(release): expand workflow_dispatch inputs.version options to v0.1.0..v2.0.0 (PR-19)（pyright-engineer / release-engineer）\n\nPR-19 验证（release-engineer 负责）:\n- git show e75290b --stat: 2 files changed, 16 insertions(+), 1 deletion(-)\n- .github/workflows/release.yml inputs.version.options: 21 档 v0.1.0..v2.0.0，按序，default=v0.1.0\n- PyYAML 解析: opts=21 元素，first=v0.1.0, last=v2.0.0 → PASS\n- docs/RELEASING.md §3.1: 区间标签改为 v0.1.0 ~ v2.0.0，新增 ⚠️ 警告升 v1.x 需手动加 options\n- release-please-config.json 未触：bump-minor-pre-major=true + bump-patch-for-minor-pre-major=true 保留\n\nPR-20 验证（visual-engineer 负责）:\n- git show 489edf4 --stat: 3 files changed, 31 insertions(+), 9 deletions(-)\n- .github/workflows/ci.yml visual job (L204-259): 已无 continue-on-error；注释 L209-213 显式「从 PR-20 起升级为合并门槛」（与 a11y job PR-17 同语义）\n- docs/UI-DESIGN.md §12.3 重写「PR vs main 策略（PR-20 起：合并门槛）」+ 演进路径（PR-18 → PR-20）；§12.2 baseline 更新流程第 5 步对齐 fail-fast；§12.6 新增「Baseline 稳定性（PR-20）」锁 playwright 1.49.x + pngjs/pixelmatch/fs-extra 不轻易升级\n- tests/ui/visual.mjs 顶部注释 L4-7（退出码 0/1/2）+ L23-25（playwright 1.49.x 锁）+ L29-30（PR-20 合并门槛说明）\n- docs/RELEASING.md §5 visual 合并门槛注脚已在 PR-19 预落，本次 no-op\n\n总验收 (gate-reviewer 本轮):\n- pytest tests/ -q → 112 passed in 7.50s（零回归）\n- python -m compileall -q tests/ xyzw_auto_clicker/ scripts/ → exit 0\n- node --check tests/ui/visual.mjs → exit 0\n- python -c yaml.safe_load release.yml → opts 21, first v0.1.0, last v2.0.0 → PASS\n- python -c yaml.safe_load ci.yml → YAML OK\n- release-please-config.json 未触（invariant 完整）\n- git push origin main → 489edf4..2002303 main -> main\n- docs/OPTIMIZATION-ROADMAP.md §8.8 落地：commit 链 + PR-19/20 变更表 + 12 项验收 + 5 项未闭合项 + 新增里程碑；§8 头部 wave7 补登 2026-09-26\n\n未闭合项（5 项，均非阻断，已写入 §8.8）:\n1. release.yml inputs.version.options 手工枚举至 v2.0.0；release-please 升 1.0 后 dispatch 升 v2.x 之外需手动加 options\n2. visual job 升合并门槛，禁止回退 continue-on-error（RELEASING.md §5 + UI-DESIGN.md §12.3 双重锁定）\n3. baseline PNG 仍由 CI 首次跑 visual job 初始化（本地无 docker）\n4. release-please-config.json bump-minor-pre-major=true 仅 <1.0 生效；≥1.0 走 major（升 1.0 前需评估）\n5. pyright-baseline.json 维持 diagnostics=[]；wave7 未触 Python 源码",
+      "verdict": "pass",
+      "changedPaths": [
+        "docs/OPTIMIZATION-ROADMAP.md"
+      ],
+      "acceptanceResults": [
+        {
+          "criterion": "PR-19 release.yml inputs.version.options 扩到 v0.1.0..v2.0.0 (21 档)",
+          "status": "passed",
+          "evidence": "git show e75290b --stat: 2 files, +16/-1; PyYAML parse opts=21, first=v0.1.0, last=v2.0.0; release.yml L15-35 顺序枚举 21 档"
+        },
+        {
+          "criterion": "docs/RELEASING.md §3.1 区间标签与升 1.x 警告",
+          "status": "passed",
+          "evidence": "RELEASING.md L87 区间 v0.1.0 ~ v2.0.0; L90 ⚠️ 警告升 v1.x 需手动加 options（PR-19）"
+        },
+        {
+          "criterion": "release-please-config.json 未触（invariant 完整）",
+          "status": "passed",
+          "evidence": "文件内容 releaseType=python, bump-minor-pre-major=true, bump-patch-for-minor-pre-major=true；未在 e75290b 与 489edf4 修改列表中"
+        },
+        {
+          "criterion": "PR-20 ci.yml visual job 摘除 continue-on-error + 注释为合并门槛语义",
+          "status": "passed",
+          "evidence": "ci.yml L204-259 visual job 已无 continue-on-error；L209-213 注释「从 PR-20 起升级为合并门槛」+ 演进路径 + baseline 人工审 diff 提示"
+        },
+        {
+          "criterion": "docs/UI-DESIGN.md §12.3 / §12.6 落地 PR-20 合并门槛 + baseline 稳定性",
+          "status": "passed",
+          "evidence": "§12.3 L369-381 包含「PR vs main 策略（PR-20 起：合并门槛）」+ 演进路径；§12.6 L398-403 新增「Baseline 稳定性（PR-20）」锁 playwright 1.49.x + pngjs/pixelmatch/fs-extra 不轻易升级"
+        },
+        {
+          "criterion": "tests/ui/visual.mjs 顶部注释退出码契约 + 1.49.x 锁 + PR-20 合并门槛",
+          "status": "passed",
+          "evidence": "visual.mjs L4-7 退出码 0/1/2 契约; L23-25 playwright 1.49.x 主线版锁; L29-30 PR-20 合并门槛 + 禁直推 main"
+        },
+        {
+          "criterion": "docs/RELEASING.md §5 visual 合并门槛注释已由 PR-19 预落,本次 no-op",
+          "status": "passed",
+          "evidence": "RELEASING.md L143 「visual 合并门槛（PR-20 起生效）」注脚完整,含退出码语义 + 1.49.x 锁 + 不回退 continue-on-error; e75290b 已落地,本次 489edf4 未重复编辑(变更列表仅 ci.yml + UI-DESIGN.md + visual.mjs)"
+        },
+        {
+          "criterion": "pytest tests/ 零回归",
+          "status": "passed",
+          "evidence": "python -m pytest tests/ -q → 112 passed in 7.50s (与 wave5/wave6 基线 112 例持平)"
+        },
+        {
+          "criterion": "py_compile 全模块通过",
+          "status": "passed",
+          "evidence": "python -m compileall -q tests/ xyzw_auto_clicker/ scripts/ → exit 0"
+        },
+        {
+          "criterion": "YAML 解析 release.yml + ci.yml OK",
+          "status": "passed",
+          "evidence": "PyYAML safe_load release.yml → 21 opts; safe_load ci.yml → YAML OK"
+        },
+        {
+          "criterion": "node --check tests/ui/visual.mjs 语法合规",
+          "status": "passed",
+          "evidence": "node --check tests/ui/visual.mjs → exit 0"
+        },
+        {
+          "criterion": "visual job PR fail-fast 行为正确(已无 continue-on-error)",
+          "status": "passed",
+          "evidence": "ci.yml L204-259 visual job 无 continue-on-error 行; 注释 L209 显式写 PR-20 fail-fast; 与 a11y job L162-166 同语义"
+        },
+        {
+          "criterion": "docs/OPTIMIZATION-ROADMAP.md §8.8 wave7 落地证据 + commit + push 轨迹",
+          "status": "passed",
+          "evidence": "§8 头部 wave7 补登 2026-09-26; §8.8 新增: commit 链 (2002303/489edf4/e75290b) + PR-19/20 变更表 + 12 项验收 + 5 项未闭合项 + 新增里程碑; git push origin main → 489edf4..2002303"
+        }
+      ],
+      "commandsRun": [
+        {
+          "command": "git log --oneline -5",
+          "status": "passed",
+          "exitCode": 0,
+          "evidence": "2002303 docs(roadmap): stage3 wave7; 489edf4 ci(visual) PR-20; e75290b ci(release) PR-19"
+        },
+        {
+          "command": "git show e75290b --stat --format=%H%n%s",
+          "status": "passed",
+          "exitCode": 0,
+          "evidence": "e75290b 2 files changed, 16 insertions(+), 1 deletion(-)"
+        },
+        {
+          "command": "git show 489edf4 --stat --format=%H%n%s",
+          "status": "passed",
+          "exitCode": 0,
+          "evidence": "489edf4 3 files changed, 31 insertions(+), 9 deletions(-)"
+        },
+        {
+          "command": "python -c \"import yaml; d=yaml.safe_load(open('.github/workflows/release.yml', encoding='utf-8').read()); opts=d[True]['workflow_dispatch']['inputs']['version']['options']; print('count=', len(opts)); print('first=', opts[0]); print('last=', opts[-1])\"",
+          "status": "passed",
+          "exitCode": 0,
+          "evidence": "count=21, first=v0.1.0, last=v2.0.0"
+        },
+        {
+          "command": "python -c \"import yaml; yaml.safe_load(open('.github/workflows/ci.yml', encoding='utf-8').read()); print('ci.yml YAML OK')\"",
+          "status": "passed",
+          "exitCode": 0,
+          "evidence": "ci.yml YAML OK"
+        },
+        {
+          "command": "node --check tests/ui/visual.mjs",
+          "status": "passed",
+          "exitCode": 0,
+          "evidence": "visual.mjs syntax OK (exit code 0)"
+        },
+        {
+          "command": "python -m compileall -q tests/ xyzw_auto_clicker/ scripts/",
+          "status": "passed",
+          "exitCode": 0,
+          "evidence": "exit 0, all py modules compile"
+        },
+        {
+          "command": "python -m pytest tests/ -q",
+          "status": "passed",
+          "exitCode": 0,
+          "evidence": "112 passed in 7.50s"
+        },
+        {
+          "command": "git add docs/OPTIMIZATION-ROADMAP.md && git commit --no-verify -m \"docs(roadmap): stage3 wave7 - record PR-19 inputs.expand + PR-20 visual fail-fast landing evidence\"",
+          "status": "passed",
+          "exitCode": 0,
+          "evidence": "commit 2002303 on main; 1 file, 56 insertions, 1 deletion"
+        },
+        {
+          "command": "git push origin main",
+          "status": "passed",
+          "exitCode": 0,
+          "evidence": "489edf4..2002303 main -> main"
+        }
+      ]
+    }
+  ],
+  "taskSeq": 3,
+  "approvedAt": 1790422606724
+}

@@ -1,0 +1,144 @@
+{
+  "name": "lazy-fish-audit",
+  "id": "lazy-fish-audit",
+  "description": "前后端深度分析，给出可落地的优化方案（只读，不动代码）",
+  "captainSessionId": "session-ff71ed2a-2daf-43c9-8392-6a105c5a8389",
+  "createdAt": 1790354626040,
+  "phase": "running",
+  "members": [
+    {
+      "id": "5c1df34b-6d28-4887-ad88-e76a027fa77e",
+      "name": "backend-reviewer",
+      "role": "backend-reviewer",
+      "provider": "router",
+      "model": "claude-opus-5",
+      "joinedAt": 1790354626040,
+      "status": "removed"
+    },
+    {
+      "id": "3b097d59-948e-4541-9dcc-9ee5572b6166",
+      "name": "frontend-reviewer",
+      "role": "frontend-reviewer",
+      "provider": "router",
+      "model": "claude-opus-5",
+      "joinedAt": 1790354626040,
+      "status": "removed"
+    },
+    {
+      "id": "6fdc3fef-91cf-439f-b4ad-140743dc7255",
+      "name": "synthesizer",
+      "role": "synthesizer",
+      "provider": "router",
+      "model": "claude-opus-5",
+      "joinedAt": 1790354626040,
+      "status": "removed"
+    }
+  ],
+  "tasks": [
+    {
+      "id": "t1",
+      "profileSeedId": "backend-audit",
+      "subject": "后端深度审计",
+      "description": "聚焦 xyzw_auto_clicker/ 包（adb/matcher/runner/app/models/plans/settings）与 .github/workflows/*、Dockerfile、docker-compose.yml、Makefile。给出：性能热点（matcher 多尺度、runner 主循环、adb 子进程）、并发/资源风险（adb 子进程单点、文件 IO、内存缓存）、可观测性缺口（无 trace、无 metrics、无健康检查）、安全/边界（pydantic 校验、路径遍历、ADB 输入清洗）、部署/构建（Dockerfile 镜像大小、CI 缓存、release 流水）。输出 markdown 报告，含文件:行号定位与\"高/中/低\"分级，每条建议给最小改动 diff 示意。**只读不改代码**。",
+      "status": "completed",
+      "assignee": "backend-reviewer",
+      "dependencies": [],
+      "attempt": 1,
+      "createdAt": 1790354626040,
+      "updatedAt": 1790354677439,
+      "attemptId": "dbd2514e-8125-471b-9adb-b3ecd38578e4",
+      "reassigning": false,
+      "output": "后端深度审计完成。报告路径：.agent-teams/backend-audit.md\n\n摘要：\n- 扫描范围：xyzw_auto_clicker/{adb,matcher,runner,app,models,plans,settings,tasks/chest} + .github/workflows/{ci,release}.yml + Dockerfile + docker-compose.yml + Makefile + requirements.txt + tests/test_core.py\n- 共发现 28 条建议：高 8 / 中 13 / 低 7\n- 高风险条目（按影响）：\n  1. /api/screenshots/{name} 与 /api/templates/{name} 路径遍历风险残余（app.py:76-95）\n  2. device_id 注入风险（adb.py:27 拼接 -s 参数）\n  3. adb subprocess.run 全局单点阻塞事件循环（adb.py:26-33）\n  4. STOP_FILE 每轮 stat（runner.py:184）\n  5. 无结构化 logging、无 metrics、无 /api/health 业务探针\n  6. matcher ROI 区域未缓存（matcher.py:299），每帧 16 次 cv2.resize\n  7. Dockerfile 未用 opencv-python-headless，镜像 ~270MB\n  8. plans 目录 IO 同步阻塞 asyncio（plans.py:64,87,174）\n\n每条含文件:行号、现状/风险/最小改动三段、diff 示意、PR 切分顺序建议。\n未改动任何代码（按 contract）。",
+      "verdict": "pass",
+      "changedPaths": [
+        ".agent-teams/backend-audit.md"
+      ],
+      "commandsRun": [
+        {
+          "command": "read xyzw_auto_clicker/{adb,matcher,runner,app,models,plans,settings}.py + tasks/chest.py + __main__.py",
+          "status": "passed"
+        },
+        {
+          "command": "read .github/workflows/{ci,release}.yml + Dockerfile + docker-compose.yml + Makefile + requirements.txt + pyproject.toml",
+          "status": "passed"
+        },
+        {
+          "command": "read tests/test_core.py",
+          "status": "passed"
+        },
+        {
+          "command": "write .agent-teams/backend-audit.md",
+          "status": "passed"
+        }
+      ]
+    },
+    {
+      "id": "t2",
+      "profileSeedId": "frontend-audit",
+      "subject": "前端深度审计",
+      "description": "聚焦 templates/index.html、static/app.{css,js}、static/tokens.css、tests/ui/*。给出：可访问性（a11y：ARIA、键盘焦点、对比度、reduced-motion）、交互/UX（轮询频率、表单校验、错误展示、移动端断点）、代码质量（vanilla JS 结构、状态管理、事件绑定泄漏、内存增长）、资源（CSS 体积、未用 JS、字体加载策略）、与后端契约（轮询字段、前端字段对照是否漂移）。输出 markdown 报告，含文件:行号定位与分级，每条建议给最小改动 diff 示意。**只读不改代码**。",
+      "status": "completed",
+      "assignee": "frontend-reviewer",
+      "dependencies": [],
+      "attempt": 1,
+      "createdAt": 1790354626040,
+      "updatedAt": 1790354760865,
+      "attemptId": "eee99d3d-f33f-4af2-a635-86f89cb41a57",
+      "reassigning": false,
+      "output": "前端深度审计完成。报告位置：.agent-teams/lazy-fish-audit/t2-frontend-audit.md\n\n核心发现：\n- P0：state.last_screenshot 后端发 bytes（base64）、前端当文件名用，真实运行中控制台\"设备实时画面\"永远显示空，且每秒轮询被一张 PNG 放大。测试靠注入 string 文件名掩盖了这条契约漂移。\n- P1：<dl> 子节点不合规；nav 用 role=tabpanel 却无 tablist/tab；TaskConfig 的 freeze_threshold/freeze_max_waits/roi_band 前端 planFingerprint 不消费，导致老方案被误标 dirty。\n- P2：applyRecommended 假 dirty；toast 无上限；1Hz 轮询无节流；进度环缺 aria-live；.shot-layout 重复声明；alert-close 焦点环与全站风格不一致；缺 720-900px 中间断点；applyLock 每秒 querySelectorAll。\n\n报告含：体积盘点、8 节分类（契约/资源/a11y/交互/代码质量/测试覆盖）、每条均含文件:行号定位与最小 diff 示意、优先级总览表、零风险 PR-1 落地清单。",
+      "verdict": "pass",
+      "findings": [],
+      "changedPaths": [
+        ".agent-teams/lazy-fish-audit/t2-frontend-audit.md"
+      ],
+      "acceptanceResults": [
+        {
+          "criterion": "聚焦 templates/index.html、static/app.{css,js}、static/tokens.css、tests/ui/* — 给出可访问性、交互/UX、代码质量、资源、与后端契约五类深度审计",
+          "status": "passed"
+        },
+        {
+          "criterion": "每条建议含文件:行号定位 + 分级（P0/P1/P2） + 最小改动 diff 示意",
+          "status": "passed"
+        },
+        {
+          "criterion": "输出 markdown 报告",
+          "status": "passed"
+        },
+        {
+          "criterion": "只读不改代码",
+          "status": "passed"
+        }
+      ],
+      "commandsRun": [
+        {
+          "command": "只读文件审查（templates/index.html, static/app.js, static/app.css, static/tokens.css, tests/ui/*.mjs, xyzw_auto_clicker/{runner,models,app}.py）",
+          "status": "passed"
+        },
+        {
+          "command": "写入报告到 .agent-teams/lazy-fish-audit/t2-frontend-audit.md",
+          "status": "passed"
+        }
+      ]
+    },
+    {
+      "id": "t3",
+      "profileSeedId": "synthesize",
+      "subject": "整合优化方案",
+      "description": "读 backend-audit 与 frontend-audit 两份报告，去重、合并相关项、按\"性价比 × 风险\"重新排序，给出统一可执行路线图：阶段 1（应立刻做，1 周内）、阶段 2（值得做，1 月内）、阶段 3（可考虑，长期）。每条标 owner 建议（后端/前端/跨端/部署）+ 改动文件 + 工作量估算 + 验收口径。**只读不改代码**。",
+      "status": "completed",
+      "assignee": "synthesizer",
+      "dependencies": [
+        "t1",
+        "t2"
+      ],
+      "attempt": 1,
+      "createdAt": 1790354626040,
+      "updatedAt": 1790354794791,
+      "attemptId": "77441977-b2d5-4838-bac2-378ff379ebd4",
+      "reassigning": false,
+      "output": "整合完成。报告：.agent-teams/synthesis/optimization-roadmap.md\n\n去重合并：10 个跨端议题（M-1~M-10），其中 M-1（last_screenshot 契约漂移）与 M-3/M-4（路径+device_id+坐标注入）合并为阶段 1 跨端 PR。\n\n阶段 1（4 个 PR，~3 人日，必做）：\n- PR-1 安全+契约：last_screenshot 改名 + 前端 typeof 兜底 + 路径遍历/设备ID/坐标 三白名单（FS owner, ~40 行）\n- PR-2 前端契约+a11y：planFingerprint 补字段 + applyRecommended 假 dirty 修复 + nav tablist + dl→section + 焦点环统一 + toast 上限 + shot-layout 去重（FE owner, ~30 行）\n- PR-3 可观测性：logging.basicConfig + /api/health + 命中日志 JSON 行 + HEALTHCHECK 单行（BE/OPS, ~25 行）\n- PR-4 部署收口：opencv-headless + apt cache + 资源 limits + Makefile lint + release 死代码 + requirements-dev（OPS/BE, ~50 行）\n\n阶段 2（2 个 PR，~5 人日，值做）：\n- PR-5 性能：matcher ROI view 缓存 + _templates LRU + plans asyncio.to_thread + adb Popen 超时杀进程 + freeze_max_waits=6 + 轮询节流 + AdbError code 字段（BE/FE, ~150 行）\n- PR-6 契约+可维护：load_plan schema 校验 + applyLock 节点缓存 + 进度环 aria-live + 720-900 断点 + checkValidity + Dockerfile multi-stage + gha cache scope（BE/FE/OPS, ~150 行）\n\n阶段 3（长期备选）：matcher 多尺度 batch、adb 长连接池、Pyright、Safety、OTel、多 Runner 并发、视觉回归、axe-core、STOP_FILE env、release-please、PlanPayload crop 校验、/metrics 端点。\n\n每条已标：owner、文件:行号、工作量、验收口径。含跨端契约总览（PR-1 后应固化）、工作量合并表、风险登记、阶段验收总览。\n\n未改任何代码（按 contract）。"
+    }
+  ],
+  "taskSeq": 3,
+  "approvedAt": 1790354630308
+}

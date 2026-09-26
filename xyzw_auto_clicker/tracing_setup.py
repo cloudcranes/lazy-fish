@@ -84,7 +84,11 @@ def configure_tracer(name: str = _SERVICE_NAME, service_version: str | None = No
         # 直接从 NoOp provider 拿 tracer，不走全局：避免「SDK provider 已注册后
         # 临时切到 disabled」时仍然拿到 SDK tracer 的语义偏差。
         return trace.NoOpTracerProvider().get_tracer(name)
-    version = service_version if service_version is not None else os.environ.get("LAZY_FISH_VERSION", "dev")
+    version = (
+        service_version
+        if service_version is not None
+        else os.environ.get("LAZY_FISH_VERSION", "dev")
+    )
     global _provider
     with _provider_lock:
         if _provider is None:
@@ -178,6 +182,7 @@ def force_shutdown() -> None:
     # 但 daemon thread 仍活着的情况）
     try:
         import gc
+
         from opentelemetry.sdk._shared_internal import BatchProcessor
 
         for obj in gc.get_objects():

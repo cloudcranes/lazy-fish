@@ -1,0 +1,287 @@
+{
+  "name": "lazy-fish-stage3-wave10",
+  "id": "lazy-fish-stage3-wave10",
+  "description": "阶段 3 wave10：OTel collector sidecar 端到端闭环 + 多 Runner 并发（多设备并行）",
+  "captainSessionId": "session-ff71ed2a-2daf-43c9-8392-6a105c5a8389",
+  "createdAt": 1790426161554,
+  "phase": "running",
+  "members": [
+    {
+      "id": "30e737f7-f025-4651-b00b-f9b9425db6db",
+      "name": "collector-engineer",
+      "role": "collector-engineer",
+      "provider": "router",
+      "model": "claude-opus-5",
+      "joinedAt": 1790426161554,
+      "status": "idle"
+    },
+    {
+      "id": "75241ef1-4812-4d4c-a3ea-73bb3f480515",
+      "name": "concurrency-engineer",
+      "role": "concurrency-engineer",
+      "provider": "router",
+      "model": "claude-opus-5",
+      "joinedAt": 1790426161554,
+      "status": "idle"
+    },
+    {
+      "id": "18024ef4-6a86-4d84-84de-4f6d2ef4816a",
+      "name": "gate-reviewer",
+      "role": "gate-reviewer",
+      "provider": "router",
+      "model": "claude-opus-5",
+      "joinedAt": 1790426161554,
+      "status": "idle"
+    }
+  ],
+  "tasks": [
+    {
+      "id": "t1",
+      "profileSeedId": "collector-sidecar",
+      "subject": "OTel collector sidecar",
+      "description": "PR-25（OTel collector sidecar）：(1) docker-compose.yml 加 otel-collector 服务（otel/opentelemetry-collector-contrib:0.118.0），端口 4317:4317 (grpc) + 4318:4318 (http) + 8889:8889 (prometheus)；(2) lazy-fish 服务 environment OTEL_EXPORTER_OTLP_ENDPOINT 改 http://otel-collector:4317；(3) config 文件 .otel/collector.yaml：receivers.otlp / exporters: debug + prometheus + otlphttp(可选) / service.pipelines.traces.debug + metrics；(4) lazy-fish 依赖 otel-collector (depends_on: condition: service_healthy)；(5) docs/OPTIMIZATION-ROADMAP.md §8.10.1 附录更新 collector 端到端验证清单（curl 到 8889 metrics）；(6) tests：docker compose config 解析（无 docker 则跳过）。验证：pytest tests/ 119 passed；YAML 解析；commit + push，报 SHA。范围：docker-compose.yml + .otel/collector.yaml (新) + docs/OPTIMIZATION-ROADMAP.md。",
+      "status": "completed",
+      "assignee": "collector-engineer",
+      "dependencies": [],
+      "attempt": 1,
+      "createdAt": 1790426161554,
+      "updatedAt": 1790426622182,
+      "attemptId": "9c704032-6b7b-459e-b6ed-c65ac2778960",
+      "reassigning": false,
+      "output": "PR-25 OTel collector sidecar 落地：docker-compose.yml 加 otel-collector（otel/opentelemetry-collector-contrib:0.118.0，4317/4318/8889，healthcheck 用二进制自带 healthcheck 子命令——scratch 镜像无 shell）；lazy-fish endpoint 改 http://otel-collector:4317 + depends_on service_healthy；新增 .otel/collector.yaml（otlp grpc+http → debug + prometheus，otlphttp 注释可选）；docs §8.10.1 附录加 6 步端到端验证清单（curl localhost:8889/metrics），§8.11 记录 wave10；新增 tests/test_pr25_collector_compose.py（3 契约用例 + docker compose config 解析，无 docker 跳过）。验证：pytest tests/ = 122 passed, 1 skipped（本机无 docker）；commit e750089 (PR-25) + 2cabd79 (SHA 记录) 已 push origin main，HEAD=2cabd79149b88e7d13d929eb56d34880a7432739。",
+      "changedPaths": [
+        "docker-compose.yml",
+        ".otel/collector.yaml",
+        "docs/OPTIMIZATION-ROADMAP.md",
+        "tests/test_pr25_collector_compose.py"
+      ],
+      "acceptanceResults": [
+        {
+          "criterion": "docker-compose.yml 加 otel-collector 服务（contrib:0.118.0，端口 4317/4318/8889）",
+          "status": "passed",
+          "evidence": "test_compose_has_otel_collector_service 通过：image=otel/opentelemetry-collector-contrib:0.118.0，ports 含 4317:4317/4318:4318/8889:8889"
+        },
+        {
+          "criterion": "lazy-fish OTEL_EXPORTER_OTLP_ENDPOINT 改 http://otel-collector:4317",
+          "status": "passed",
+          "evidence": "test_compose_lazy_fish_endpoint_points_at_collector 通过；env=OTEL_EXPORTER_OTLP_ENDPOINT http://otel-collector:4317 + PROTOCOL grpc"
+        },
+        {
+          "criterion": ".otel/collector.yaml：receivers.otlp / exporters debug+prometheus(+otlphttp 可选) / pipelines traces.debug + metrics",
+          "status": "passed",
+          "evidence": "test_collector_yaml_parses_and_has_required_sections 通过；otlp grpc+http，exporters debug/prometheus，pipelines traces→debug、metrics→debug+prometheus，otlphttp 注释可选"
+        },
+        {
+          "criterion": "lazy-fish depends_on otel-collector condition service_healthy",
+          "status": "passed",
+          "evidence": "compose 契约测试断言 depends_on.otel-collector.condition == service_healthy 通过"
+        },
+        {
+          "criterion": "docs §8.10.1 附录更新 collector 端到端验证清单（curl 到 8889 metrics）",
+          "status": "passed",
+          "evidence": "§8.10.1 部署清单后新增 6 步验证清单（curl -s localhost:8889/metrics），§8.11 记录 wave10 全量清单"
+        },
+        {
+          "criterion": "tests：docker compose config 解析（无 docker 则跳过）",
+          "status": "passed",
+          "evidence": "test_docker_compose_config_resolves 在本机无 docker 环境 SKIPPED，含 docker 环境会跑 docker compose config"
+        }
+      ],
+      "commandsRun": [
+        {
+          "command": "pytest tests/test_pr25_collector_compose.py",
+          "status": "passed",
+          "exitCode": 0,
+          "evidence": "3 passed, 1 skipped (docker 不在 PATH)"
+        },
+        {
+          "command": "pytest tests/",
+          "status": "passed",
+          "exitCode": 0,
+          "evidence": "122 passed, 1 skipped（119 原有用例 + 3 新契约用例全绿）"
+        },
+        {
+          "command": "YAML 解析（pyyaml safe_load）",
+          "status": "passed",
+          "exitCode": 0,
+          "evidence": "docker-compose.yml 与 .otel/collector.yaml 均 safe_load 成功且断言通过"
+        },
+        {
+          "command": "git commit + push origin main",
+          "status": "passed",
+          "exitCode": 0,
+          "evidence": "e750089 (PR-25) + 2cabd79 (SHA 记录) 已推送，local HEAD 与 origin/main 均为 2cabd79149b88e7d13d929eb56d34880a7432739"
+        }
+      ]
+    },
+    {
+      "id": "t2",
+      "profileSeedId": "multi-runner",
+      "subject": "多 Runner 并发",
+      "description": "PR-26（多 Runner 并发）：(1) xyzw_auto_clicker/runner.py TaskRunner 改为实例化后可在同一进程并发多个任务：加 RunnerRegistry（device_id → runner），start(device_id) 查/建；任务用 asyncio.create_task 隔离，各自 state。(2) app.py：/api/tasks/chest/start 增加可选 device_id 参数，registry.get_or_create(device_id)。start；/api/tasks/state 返回按 device_id 分组或传入 device_id 查询；/api/tasks/stop 支持指定 device_id。(3) AdbClient 池已支持多 device 长连接（PR-9），无改动。(4) tests/test_pr26_concurrency.py：单进程两 device 并行跑（mock adb），验证互不干扰 + 各自 state 独立。验证：pytest tests/ 119 passed + 新增；py_compile；commit + push，报 SHA。范围：xyzw_auto_clicker/{runner,app}.py + tests/test_pr26_concurrency.py (新)。",
+      "status": "completed",
+      "assignee": "concurrency-engineer",
+      "dependencies": [],
+      "attempt": 1,
+      "createdAt": 1790426161554,
+      "updatedAt": 1790427007372,
+      "attemptId": "e301d01a-494b-42e1-a6bb-6f7a86d86a42",
+      "reassigning": false,
+      "output": "PR-26 多 Runner 并发完成。runner.py: RunnerState 加 device_id；TaskRunner.start 用 asyncio.create_task 隔离、state 各自独立；新增 RunnerRegistry(device_id→runner, get_or_create/get/snapshots)。app.py: /api/tasks/chest/start 支持 device_id 参数；/api/tasks/state 支持 ?device_id= 单查 + 不传返回默认快照并附 devices 分组；/api/tasks/stop 支持 device_id，白名单校验。默认(None)设备落 key=\"\" runner，旧接口契约不变。tests/test_pr26_concurrency.py 4 例：注册表复用、两设备并发互不干扰+state 独立、默认设备隔离、stop 只停指定设备。验证：pytest tests/ 127 collected → 126 passed + 1 skipped；py_compile 全过。commit 6e189c1，已 push，SHA=6e189c175f5b53ff049e18f08f27bcbbd7d7eb03。",
+      "changedPaths": [
+        "xyzw_auto_clicker/runner.py",
+        "xyzw_auto_clicker/app.py",
+        "tests/test_pr26_concurrency.py"
+      ],
+      "acceptanceResults": [
+        {
+          "criterion": "RunnerRegistry: device_id → runner 查/建，同一设备复用",
+          "status": "passed",
+          "evidence": "test_registry_reuses_same_runner_per_device 绿：同 device_id is 同实例，不同 device 不同实例"
+        },
+        {
+          "criterion": "任务用 asyncio.create_task 隔离，各自 state",
+          "status": "passed",
+          "evidence": "test_two_devices_run_concurrently_with_independent_state 绿：两设备各点 3/2 次互不干扰，state.device_id/clicked/target 独立"
+        },
+        {
+          "criterion": "/api/tasks/chest/start 可选 device_id，registry.get_or_create",
+          "status": "passed",
+          "evidence": "start_chest 用 registry.get_or_create(req.device_id) 启动并回 device_id"
+        },
+        {
+          "criterion": "/api/tasks/state 按 device_id 分组或单查",
+          "status": "passed",
+          "evidence": "无参数返回默认快照+devices 分组字段；?device_id= 返回该设备快照；旧 test_pr1 平铺契约仍绿"
+        },
+        {
+          "criterion": "/api/tasks/stop 支持指定 device_id",
+          "status": "passed",
+          "evidence": "test_stop_isolates_one_device 绿：stop(dev_a) 后 A=stopped、B 继续 running；白名单校验防注入"
+        },
+        {
+          "criterion": "单进程两 device 并行（mock adb）互不干扰",
+          "status": "passed",
+          "evidence": "tests/test_pr26_concurrency.py 4 passed"
+        }
+      ],
+      "commandsRun": [
+        {
+          "command": "py -m pytest tests/ -q",
+          "status": "passed",
+          "exitCode": 0,
+          "evidence": "127 collected → 126 passed, 1 skipped"
+        },
+        {
+          "command": "py -m pytest tests/test_pr26_concurrency.py -q",
+          "status": "passed",
+          "exitCode": 0,
+          "evidence": "4 passed"
+        },
+        {
+          "command": "py -m py_compile xyzw_auto_clicker/runner.py xyzw_auto_clicker/app.py tests/test_pr26_concurrency.py",
+          "status": "passed",
+          "exitCode": 0,
+          "evidence": "py_compile OK"
+        },
+        {
+          "command": "git push origin main",
+          "status": "passed",
+          "exitCode": 0,
+          "evidence": "2cabd79..6e189c1 main -> main; SHA=6e189c175f5b53ff049e18f08f27bcbbd7d7eb03"
+        }
+      ]
+    },
+    {
+      "id": "t3",
+      "profileSeedId": "stage3-wave10-gate",
+      "subject": "wave10 总验收 + 路线图更新",
+      "description": "读 PR-25 + PR-26 commit 与 diff；pytest tests/ 零回归；py_compile；collector compose config 解析；多 runner 并发两 device 并行验证；更新 docs/OPTIMIZATION-ROADMAP.md §8 追加 wave10 落地证据。输出 PASS/FAIL + 未闭合项。",
+      "status": "completed",
+      "assignee": "gate-reviewer",
+      "dependencies": [
+        "t1",
+        "t2"
+      ],
+      "attempt": 1,
+      "createdAt": 1790426161554,
+      "updatedAt": 1790427164698,
+      "attemptId": "90a00601-5b49-427d-89f7-5b6f11b64f27",
+      "reassigning": false,
+      "output": "wave10 总验收 PASS。\n\n验证：\n- git log 确认 PR-25 e750089 + SHA 记录 2cabd79 + PR-26 6e189c1 均在 main，HEAD=6e189c1（验收前）。\n- PR-25 diff：docker-compose.yml 加 otel-collector（otel/opentelemetry-collector-contrib:0.118.0，4317/4318/8889，healthcheck 用二进制 healthcheck 子命令）；lazy-fish endpoint 改 http://otel-collector:4317 + depends_on service_healthy；.otel/collector.yaml（otlp grpc+http → debug + prometheus）。\n- PR-26 diff：RunnerRegistry(device_id→runner, get_or_create/get/snapshots)；RunnerState.device_id；app.py start/state/stop 支持 device_id，默认 None 落 key=\"\" 旧契约不变。\n- pytest tests/ = 126 passed, 1 skipped（13.49s）；8.11 更新前基线对比：PR-25/PR-26 引入 7 新例（3 compose + 4 并发）全部通过，1 skipped 仅 test_docker_compose_config_resolves（本机无 docker）。零回归。\n- py_compile runner.py + app.py OK。\n- docker-compose.yml YAML 解析 OK（services: otel-collector + lazy-fish；lazy-fish depends_on otel-collector condition service_healthy）；.otel/collector.yaml 解析 OK。\n- 两 device 并发验证：test_two_devices_run_concurrently_with_independent_state（3/2 次点击互不干扰、state 独立、snapshots 分组）+ test_stop_isolates_one_device（stop 只停指定设备）实测通过。\n\n路线图更新：docs/OPTIMIZATION-ROADMAP.md §8.11 追加 PR-26 多 Runner 落地表 + wave10 总验收证据（126 passed/1 skipped、py_compile、compose 解析、两设备并发实测）；同步修正 §8.10.1 env 矩阵生产行 endpoint 为 http://otel-collector:4317（原 host.docker.internal 与 PR-25 冲突）。commit d18f360 已落 main。\n\n未闭合项（非阻断）：\n1. 真实 docker daemon 下 docker compose up + curl :8889/metrics 端到端需有 docker 机器执行（环境能力，非代码缺口）。\n2. 多 Runner 并发仅经 mock adb 验证；真实 adb server 多设备（-s <serial>）接入后需按 §3 触发条件真机冒烟（device_id 已透传 adb.screenshot_png/adb.tap，接口就位）。",
+      "verdict": "pass",
+      "acceptanceResults": [
+        {
+          "criterion": "读 PR-25 + PR-26 commit 与 diff",
+          "status": "passed",
+          "evidence": "git show 核对 e750089/2cabd79/6e189c1 全部落地；compose/collector.yaml/runner/app 变更符合 t1/t2 声明"
+        },
+        {
+          "criterion": "pytest tests/ 零回归",
+          "status": "passed",
+          "evidence": "126 passed + 1 skipped（仅 docker compose config 无 docker 跳过），PR-25/PR-26 新增 7 例全过"
+        },
+        {
+          "criterion": "py_compile",
+          "status": "passed",
+          "evidence": "runner.py + app.py py_compile 通过"
+        },
+        {
+          "criterion": "collector compose config 解析",
+          "status": "passed",
+          "evidence": "docker-compose.yml/.otel/collector.yaml YAML 解析通过；otel-collector 服务 + depends_on service_healthy + endpoint http://otel-collector:4317 契约一致"
+        },
+        {
+          "criterion": "多 runner 并发两 device 并行验证",
+          "status": "passed",
+          "evidence": "test_two_devices_run_concurrently_with_independent_state + test_stop_isolates_one_device 实测通过（3/2 点击互不干扰、state 独立、stop 隔离）"
+        },
+        {
+          "criterion": "更新 docs/OPTIMIZATION-ROADMAP.md §8 追加 wave10 落地证据",
+          "status": "passed",
+          "evidence": "§8.11 追加 PR-26 表 + wave10 总验收证据，修正 §8.10.1 env 矩阵 endpoint 为 otel-collector，commit d18f360"
+        }
+      ],
+      "commandsRun": [
+        {
+          "command": "git log --oneline -8 / git rev-parse HEAD",
+          "status": "passed",
+          "exitCode": 0,
+          "evidence": "PR-25 e750089 + SHA 2cabd79 + PR-26 6e189c1 在 main"
+        },
+        {
+          "command": "git show --stat/diff PR-25 PR-26",
+          "status": "passed",
+          "exitCode": 0,
+          "evidence": "compose/collector/runner/app 变更与声明一致"
+        },
+        {
+          "command": "python -m pytest tests/ -q",
+          "status": "passed",
+          "exitCode": 0,
+          "evidence": "126 passed, 1 skipped in 13.49s"
+        },
+        {
+          "command": "python -m py_compile xyzw_auto_clicker/runner.py xyzw_auto_clicker/app.py",
+          "status": "passed",
+          "exitCode": 0,
+          "evidence": "py_compile OK"
+        },
+        {
+          "command": "python -c yaml 解析 docker-compose.yml / .otel/collector.yaml",
+          "status": "passed",
+          "exitCode": 0,
+          "evidence": "services otel-collector+lazy-fish, depends_on service_healthy, endpoint otel-collector:4317"
+        },
+        {
+          "command": "python -m pytest tests/test_pr25_collector_compose.py tests/test_pr26_concurrency.py -v",
+          "status": "passed",
+          "exitCode": 0,
+          "evidence": "7 passed, 1 skipped（docker compose config 无 docker 跳过）"
+        }
+      ]
+    }
+  ],
+  "taskSeq": 3,
+  "approvedAt": 1790426165239
+}
