@@ -30,7 +30,8 @@ from .plans import (
     safe_field_name,
     save_plan,
 )
-from .runner import RunnerRegistry, TaskRunner
+from .runner import RunnerRegistry
+from .runner import TaskRunner as TaskRunner  # noqa: F401  # 兼容旧测试/外部引用
 from .settings import BASE_DIR, SHOT_DIR, STOP_FILE, TEMPLATE_DIR, repair_template_names
 from .tasks.chest import build_chest_config
 from .tracing_setup import load_tracer, shutdown_tracer
