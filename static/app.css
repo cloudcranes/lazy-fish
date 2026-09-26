@@ -448,7 +448,7 @@ pre,
 .section-label {
   font-size: var(--fs-12);
   font-weight: 600;
-  color: var(--text-tertiary);
+  color: var(--text-secondary);
   letter-spacing: 0.02em;
 }
 
@@ -639,7 +639,7 @@ pre,
 .select:disabled,
 .btn:disabled {
   background: var(--surface-sunken);
-  color: var(--text-tertiary);
+  color: var(--text-secondary);
   cursor: not-allowed;
 }
 
@@ -662,7 +662,7 @@ pre,
   position: absolute;
   right: var(--sp-3);
   font-size: var(--fs-11);
-  color: var(--text-tertiary);
+  color: var(--text-secondary);
   pointer-events: none;
 }
 .input-suffix .input {
@@ -1132,7 +1132,7 @@ pre,
 }
 .ring-label {
   font-size: var(--fs-11);
-  color: var(--text-tertiary);
+  color: var(--text-secondary);
 }
 
 .status-tone-running {
@@ -1375,7 +1375,7 @@ pre,
 }
 .plan-card-meta {
   font-size: var(--fs-11);
-  color: var(--text-tertiary);
+  color: var(--text-secondary);
   font-family: var(--font-mono);
   word-break: break-all;
   line-height: 1.6;
@@ -1395,7 +1395,7 @@ pre,
   flex-wrap: wrap;
   gap: var(--sp-1) var(--sp-2);
   font-size: var(--fs-11);
-  color: var(--text-tertiary);
+  color: var(--text-secondary);
 }
 .plan-card-roles b {
   color: var(--text-secondary);
@@ -1457,7 +1457,7 @@ pre,
   border: 1px solid transparent;
   border-radius: var(--r-md);
   background: transparent;
-  color: var(--text-tertiary);
+  color: var(--text-secondary);
   cursor: pointer;
   transition: background var(--dur-fast), color var(--dur-fast), border-color var(--dur-fast);
 }
@@ -1786,7 +1786,7 @@ pre,
   flex: none;
   width: 10px;
   font-size: var(--fs-11);
-  color: var(--text-tertiary);
+  color: var(--text-secondary);
 }
 .advanced[open] .advanced-head::before {
   content: "▾";
@@ -1862,7 +1862,7 @@ pre,
 }
 .tpl-thumb-empty {
   font-size: var(--fs-11);
-  color: var(--text-tertiary);
+  color: var(--text-secondary);
 }
 .tpl-name {
   font-size: var(--fs-12);
@@ -1895,7 +1895,7 @@ pre,
 .empty-state {
   padding: var(--sp-8);
   text-align: center;
-  color: var(--text-tertiary);
+  color: var(--text-secondary);
   font-size: var(--fs-13);
   border: 1px dashed var(--border-default);
   border-radius: var(--r-lg);
@@ -2053,7 +2053,7 @@ pre,
 }
 .log-view:empty::before {
   content: "暂无日志";
-  color: var(--text-tertiary);
+  color: var(--text-secondary);
 }
 .log-view .lvl-error {
   color: var(--danger-fg);
