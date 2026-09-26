@@ -1,5 +1,16 @@
 # Changelog
 
+## [0.1.3](https://github.com/cloudcranes/lazy-fish/compare/xyzw-auto-clicker-v0.1.2...xyzw-auto-clicker-v0.1.3) (2026-09-26)
+
+
+### Bug Fixes
+
+* **release:** Create GitHub release 仅 tag push 路径，dispatch 只补镜像 ([7b4c3d0](https://github.com/cloudcranes/lazy-fish/commit/7b4c3d07d8f8d7580309ce6ce8b1081bf41b4de2))
+* **release:** dispatch input 改用 inputs.version 表达式读取 ([d80531b](https://github.com/cloudcranes/lazy-fish/commit/d80531b19dc54da83ba74e96b1296cc918f79661))
+* **release:** dispatch input 环境变量名 INPUTS_VERSION 改 INPUT_VERSION ([a588e37](https://github.com/cloudcranes/lazy-fish/commit/a588e37d5cc912659e74c02d305600379f33aff8))
+* **release:** dispatch 用 input 版本 + tag 带组件前缀，release:published 不重复建 release ([2db37ed](https://github.com/cloudcranes/lazy-fish/commit/2db37edb9ca840ab4f36c045d167fca3d6ee2653))
+* **release:** release:published 触发镜像构建（release-please API 建 tag 不触发 push:tags）+ dispatch 读 ref tag ([899e9ce](https://github.com/cloudcranes/lazy-fish/commit/899e9ce8fd0ba2add73c724022fa9f37ffd82806))
+
 ## [0.1.2](https://github.com/cloudcranes/lazy-fish/compare/xyzw-auto-clicker-v0.1.1...xyzw-auto-clicker-v0.1.2) (2026-09-26)
 
 
