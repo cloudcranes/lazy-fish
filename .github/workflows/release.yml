@@ -22,7 +22,14 @@ jobs:
       - name: Extract version
         id: version
         run: |
-          VERSION="${GITHUB_REF_NAME#v}"
+          if [ "${GITHUB_EVENT_NAME}" = "workflow_dispatch" ]; then
+            # Manual dispatch: no tag is being cut. Pin the tag to the short SHA so the
+            # image is identifiable in GHCR without colliding with the next real release.
+            VERSION="$(echo "${GITHUB_SHA}" | cut -c1-7)"
+          else
+            # Tag push: ${GITHUB_REF_NAME} is the v*.*.* tag; strip the leading 'v'.
+            VERSION="${GITHUB_REF_NAME#v}"
+          fi
           echo "VERSION=${VERSION}" >> "${GITHUB_OUTPUT}"
           echo "TAG=${VERSION}" >> "${GITHUB_OUTPUT}"
 

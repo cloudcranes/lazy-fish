@@ -8,7 +8,7 @@ PORT      ?= 8765
 COMPOSE   ?= docker compose
 TAG       ?= dev
 
-.PHONY: help install dev run test test-core eval lint smoke-import format clean build compose-up compose-down compose-build release
+.PHONY: help install dev run test test-core eval lint smoke-import format clean build compose-up compose-down compose-build release-dispatch
 
 help:  ## list targets
 	@grep -E '^[a-zA-Z_-]+:.*?## .*$$' $(MAKEFILE_LIST) | awk 'BEGIN{FS=":.*?## "}{printf "  %-14s %s\n", $$1, $$2}'
@@ -58,8 +58,9 @@ compose-down:  ## compose down
 compose-build:  ## build from local source via compose
 	COMPOSE_TAG=$(TAG) $(COMPOSE) build
 
-release:  ## cut a release: bump tag, push, let CI build + publish
-	@if [ -z "$(VERSION)" ]; then echo "VERSION=x.y.z required (e.g. make release VERSION=0.1.0)" >&2; exit 1; fi
-	git tag v$(VERSION)
-	git push origin v$(VERSION)
-	@echo "Release v$(VERSION) triggered: https://github.com/cloudcranes/lazy-fish/releases"
+release-dispatch:  # DEPRECATED: use the release-please PR (see docs/RELEASING.md); this only triggers an ad-hoc workflow_dispatch build with VERSION=GITHUB_SHA short
+	@echo "DEPRECATED: 'make release-dispatch' is a manual escape hatch." >&2
+	@echo "Use Conventional Commits on main; release-please will open a Release PR." >&2
+	@echo "See docs/RELEASING.md for the canonical flow." >&2
+	@which gh >/dev/null 2>&1 || { echo "gh CLI required for workflow_dispatch (https://cli.github.com)" >&2; exit 1; }
+	gh workflow run release.yml --ref main
