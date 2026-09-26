@@ -32,8 +32,10 @@ try {
   const ctx = await browser.newContext();
   const page = await ctx.newPage();
 
-  // 视图切换先走一次：让 SPA 完成首屏路由与 lazy 模板载入
-  await page.goto(URL, { waitUntil: "networkidle", timeout: 30000 });
+  // 视图切换先走一次：让 SPA 完成首屏路由与 lazy 模板载入。
+  // 用 domcontentloaded 而非 networkidle：前端每秒轮询 /api/tasks/state，
+  // networkidle 在轮询下永不达成（a11y 只关心 DOM 语义树，不关心网络静默）。
+  await page.goto(URL, { waitUntil: "domcontentloaded", timeout: 30000 });
 
   for (const view of VIEWS) {
     // 通过 hash 路由切换（与 smoke.mjs 的 "hash routing works on load" 同一套机制）

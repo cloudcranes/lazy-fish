@@ -62,7 +62,9 @@ try {
     deviceScaleFactor: 1,
   });
   const page = await ctx.newPage();
-  await page.goto(URL, { waitUntil: "networkidle", timeout: 30000 });
+  // 用 domcontentloaded 而非 networkidle：前端每秒轮询 /api/tasks/state，
+  // networkidle 在轮询下永不达成（视觉回归只关心首屏渲染，不关心网络静默）。
+  await page.goto(URL, { waitUntil: "domcontentloaded", timeout: 30000 });
 
   for (const view of VIEWS) {
     // hash 路由切换（与 a11y.mjs 一致），再等视图淡入 + 状态 active
