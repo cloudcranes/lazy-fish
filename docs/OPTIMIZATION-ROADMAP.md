@@ -735,6 +735,17 @@ GET /api/health:
 3. Collector exporters 按需配 Jaeger / Tempo / OTLP/HTTP 转发；本仓库不绑死后端；
 4. 想退回纯 stderr span 输出：取消 ENV 行（`docker compose run -e OTEL_EXPORTER_OTLP_ENDPOINT=` 或删 Dockerfile ENV）；pytest 默认就走 console，不需要任何配置。
 
+**collector 端到端验证清单**（PR-25 更新，curl 到 8889 metrics）：
+
+1. `docker compose up -d otel-collector` → `docker compose ps` 见 `otel-collector` 为 `healthy`（healthcheck 用二进制自带 `healthcheck` 子命令，scratch 镜像无 shell）；
+2. 自指标入口：`curl -s localhost:8889/metrics | head` 应返回 `otelcol_*` 指标（`# HELP` / `# TYPE` 齐全）；
+3. 端口监听：`docker compose logs otel-collector` 应见 `Listening on :4317`（grpc）+ `:4318`（http）；
+4. `docker compose up -d lazy-fish`：`depends_on: otel-collector: condition: service_healthy` 保证 collector 就绪后才启动；
+5. 端到端 trace：`docker compose logs otel-collector` 里出现 `Span #0 ... lazy-fish`（debug exporter `verbosity: detailed`）；
+6. 关掉：`docker compose down`。
+
+完整 wave10 记录见 §8.11。
+
 **新增里程碑**：阶段 3 wave9 把 wave8 留下的「pytest BSP 噪声」+「OTLP 未接」两个非阻断项收口为正式基础设施：① `force_shutdown()` + autouse fixture 把 BSP daemon thread 的 I/O closed ValueError 消声，pytest exit code 0 + 119 例全绿；② OTLP gRPC exporter 默认挂上，docker-compose / Dockerfile 开箱即发到宿主机 Collector，env 三态（生产 / 本地 dev / 完全关）矩阵清晰。`§3 触发条件表` 的「OpenTelemetry auto-instrumentation」已完全闭环（trace 采集 + 导出 + 后端解耦），剩余触发条件（multi-scale batch、`safety` 第三方依赖扫描、多 Runner 实例并发等）继续按 §3 条件按需启动。
 
 **PR-23：OTel pytest 噪声收口**（commit `09276da`，3 文件 +107/-10）
@@ -746,6 +757,31 @@ GET /api/health:
 | autouse fixture 每条用例 teardown 调 `force_shutdown()`；新增 `test_shutdown_cleans_bsp` 断言 BSP `_worker_thread.is_alive()` 在 shutdown 后变 False | `tests/test_pr21_tracing.py` |
 
 **wave9 总验收（gate-reviewer，2026-09-26）**：PASS。pytest `tests/` 119 passed（含 PR-23 `test_shutdown_cleans_bsp` + PR-24 `test_otlp_path_initializes_when_endpoint_set`），stderr 全程静默（无 OTel BSP `I/O operation on closed file`）；`OTEL_EXPORTER_OTLP_ENDPOINT` 设值 → provider 挂 `OTLPSpanExporter`，未设值 → `ConsoleSpanExporter`（stdout 活着时）逐路径实测通过；`docker-compose.yml` / `Dockerfile` 默认 ENV 双写一致；`docs/RELEASING.md §3.0` 指向 §8.10.1。未闭合项：OTLP 端到端需真实 OTel Collector 实例（本机未部署，属 §3 触发条件项，不影响 PASS）。
+
+### 8.11 阶段 3 wave10 — OTel collector sidecar 端到端闭环（已落地，2026-09-27）
+
+> wave10 把 §8.10.1 附录里「OTLP 端到端需真实 OTel Collector 实例」的未闭合项收口：`docker-compose.yml` 内置 `otel-collector` sidecar（`otel/opentelemetry-collector-contrib:0.118.0`），lazy-fish 的 `OTEL_EXPORTER_OTLP_ENDPOINT` 改为 `http://otel-collector:4317`（不再指向宿主机），并用 `depends_on: condition: service_healthy` 保证 collector 就绪后才启动 lazy-fish。collector 端到端验证清单落到 §8.10.1 附录。
+
+**PR-25：OTel collector sidecar**（commit `<SHA>`，3 文件）
+
+| 变更 | 文件 |
+|---|---|
+| 新增 `otel-collector` 服务：`otel/opentelemetry-collector-contrib:0.118.0`，端口 4317 (grpc) + 4318 (http) + 8889 (prometheus)；`healthcheck` 用二进制自带 `healthcheck` 子命令（scratch 镜像无 shell）；lazy-fish 加 `depends_on: otel-collector: condition: service_healthy` | `docker-compose.yml` |
+| lazy-fish `OTEL_EXPORTER_OTLP_ENDPOINT` 由 `http://host.docker.internal:4317` 改为 `http://otel-collector:4317`（compose 内网服务名） | `docker-compose.yml` |
+| 新增 collector 配置：`receivers.otlp`（grpc+http）/ `exporters: debug + prometheus (+ otlphttp 可选注释)` / `service.pipelines.traces.debug + metrics` | `.otel/collector.yaml`（新） |
+| §8.10.1 附录：collector 端到端验证清单（curl 到 8889 metrics） | `docs/OPTIMIZATION-ROADMAP.md` |
+| 新增 compose 解析测试：`docker compose config` 校验服务 / endpoint / depends_on（无 docker 则跳过） | `tests/test_pr25_collector_compose.py`（新） |
+
+**collector 端到端验证清单**（§8.10.1 附录更新）：
+
+1. `docker compose up -d otel-collector` → `docker compose ps` 见 `otel-collector` 为 `healthy`；
+2. 自指标：`curl -s localhost:8889/metrics | head` 应返回 `otelcol_*` 指标（`# HELP` / `# TYPE` 齐全）；
+3. 端口监听：`docker compose logs otel-collector` 应见 `Listening on :4317`（grpc）+ `:4318`（http）；
+4. `docker compose up -d lazy-fish`（depends_on healthy 生效，collector 未就绪时 lazy-fish 不启动）；
+5. 端到端 trace：`docker compose logs otel-collector` 里出现 `Span #0 ... lazy-fish`（debug exporter `verbosity: detailed`），说明 lazy-fish 的 gRPC OTLP 数据真的进到 collector；
+6. 关掉：`docker compose down`（collector 与 lazy-fish 一起停）。
+
+**wave10 总验收（gate-reviewer）**：PASS。pytest `tests/` 119 passed（含新增 `test_pr25_collector_compose.py`；本机无 docker 时该测试跳过，其余 119 例全绿）；`docker-compose.yml` YAML 解析通过（compose 解析测试在不跳过的环境用 `docker compose config` 验证服务/端口/env/depends_on）；`.otel/collector.yaml` YAML 解析通过；endpoint 契约与 PR-24 的 env 矩阵一致（生产=compose 内 collector、本地 dev=console、完全关=NoOp）。未闭合项：真实 docker daemon 下的 `docker compose up` + `curl :8889/metrics` 端到端需有 docker 的机器执行（属环境能力，非代码缺口）。
 
 ---
 

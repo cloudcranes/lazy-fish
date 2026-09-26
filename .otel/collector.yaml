@@ -1,0 +1,32 @@
+# PR-25：OTel Collector sidecar 配置（otel/opentelemetry-collector-contrib:0.118.0）。
+# lazy-fish 容器通过 gRPC OTLP（:4317）把 trace 发到这里；
+# debug exporter 打 stdout 便于 `docker compose logs otel-collector` 看端到端；
+# prometheus exporter 在 :8889 暴露 collector 自指标（curl 验证入口）。
+receivers:
+  otlp:
+    protocols:
+      grpc:
+        endpoint: 0.0.0.0:4317
+      http:
+        endpoint: 0.0.0.0:4318
+
+exporters:
+  debug:
+    verbosity: detailed
+  prometheus:
+    endpoint: 0.0.0.0:8889
+  # otlphttp（可选）：把数据转发到远端后端（如 Jaeger/Tempo/SaaS）时再启用，
+  # 本仓库不绑死后端，默认不转发。
+  # otlphttp:
+  #   endpoint: http://jaeger:4318
+
+service:
+  pipelines:
+    traces:
+      receivers: [otlp]
+      processors: []
+      exporters: [debug]
+    metrics:
+      receivers: [otlp]
+      processors: []
+      exporters: [debug, prometheus]

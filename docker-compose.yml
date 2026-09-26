@@ -1,4 +1,28 @@
 services:
+  otel-collector:
+    # PR-25：OTel Collector sidecar（contrib 发行版）。grpc :4317 / http :4318
+    # 收 lazy-fish 的 OTLP 数据；:8889 暴露 Prometheus 自指标（curl 验证入口）。
+    image: otel/opentelemetry-collector-contrib:0.118.0
+    container_name: otel-collector
+    restart: unless-stopped
+    command: ["--config", "/etc/otelcol-contrib/config.yaml"]
+    ports:
+      - "4317:4317"  # OTLP gRPC
+      - "4318:4318"  # OTLP HTTP
+      - "8889:8889"  # Prometheus self-metrics
+    volumes:
+      - ./.otel/collector.yaml:/etc/otelcol-contrib/config.yaml:ro
+    # scratch 镜像无 shell：用二进制自带 healthcheck 子命令（扩展名 /health，
+    # 校验配置并只报 component status，不需要 13133 端口）。
+    healthcheck:
+      test: ["CMD", "/otelcol-contrib", "healthcheck", "--config=/etc/otelcol-contrib/config.yaml"]
+      interval: 30s
+      timeout: 5s
+      retries: 3
+      start_period: 10s
+    mem_limit: 256M
+    cpus: 0.5
+
   lazy-fish:
     # Use the published image by default; override with `docker compose build`
     # or set COMPOSE_TAG=dev to build from local source.
@@ -10,15 +34,17 @@ services:
     restart: unless-stopped
     ports:
       - "8999:8999"
+    depends_on:
+      otel-collector:
+        condition: service_healthy
     environment:
       LAZY_FISH_HOST: 0.0.0.0
       LAZY_FISH_PORT: 8999
       # PR-14：停止信号文件落进 ./data 卷所在目录，容器重启后状态保留。
       LAZY_FISH_STOP_FILE: /app/data/STOP
-      # PR-24：OTel traces → collector via gRPC OTLP。默认指向 host 上的
-      # OTel Collector（4317），生产环境请改成 collector 服务名 / 真实 endpoint。
+      # PR-25：OTel traces → 本 compose 内的 otel-collector sidecar（gRPC :4317）。
       # 取消设置即可退回 ConsoleSpanExporter 兜底（仅本机调试用）。
-      OTEL_EXPORTER_OTLP_ENDPOINT: http://host.docker.internal:4317
+      OTEL_EXPORTER_OTLP_ENDPOINT: http://otel-collector:4317
       OTEL_EXPORTER_OTLP_PROTOCOL: grpc
     volumes:
       # Persist templates / plans / last-frame cache on the host.
