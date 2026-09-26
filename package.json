@@ -1,6 +1,6 @@
 {
   "name": "xyzw-auto-clicker",
-  "version": "0.1.0",
+  "version": "0.1.1",
   "private": true,
   "description": "咸鱼之王助手仓库根 — 仅声明 UI 测试所需的开发依赖。",
   "//": "生产运行时是 Python；JS 仅用于 tests/ui/ 下的端到端与 a11y 自检。",
