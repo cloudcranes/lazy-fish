@@ -6,6 +6,7 @@ import logging
 import os
 import re
 import time
+from collections.abc import Awaitable, Callable
 from contextlib import asynccontextmanager
 from pathlib import Path
 
@@ -51,8 +52,9 @@ _configure_logging(level=os.environ.get("LOG_LEVEL", "INFO"))
 adb = AdbClient()
 matcher = ImageMatcher(TEMPLATE_DIR)
 # PR-26：runner 升级为注册表（device_id → runner）。默认设备（None）的任务落在
-# key="" 的 runner 上，旧接口/旧前端行为完全不变。
-runner = RunnerRegistry(adb, matcher)
+# key="" 的 runner 上，旧接口/旧前端行为完全不变。RunnerRegistry 提供 state /
+# tasks_started_total 代理属性，旧单 runner API 的直读写法继续有效。
+runner: RunnerRegistry = RunnerRegistry(adb, matcher)
 
 
 @asynccontextmanager
@@ -76,7 +78,9 @@ app.mount("/static", StaticFiles(directory=str(BASE_DIR / "static")), name="stat
 
 
 @app.middleware("http")
-async def _ot_http_span_middleware(request: Request, call_next):
+async def _ot_http_span_middleware(  # pyright: ignore[reportUnusedFunction]
+    request: Request, call_next: Callable[[Request], Awaitable[Response]]
+) -> Response:
     """PR-21 OTel：为每个 HTTP 请求建一条 span。
 
     ponytail: 用 FastAPI 中间件而不是 FastAPIInstrumentor，
@@ -164,16 +168,15 @@ async def take_screenshot(payload: dict[str, str | None] | None = None) -> dict[
         raise HTTPException(status_code=400, detail="device_id 仅允许字母数字与 . _ : -")
     data = await adb.screenshot_png(device_id)
     # 与 runner 保持一致：截图落盘一份给 /api/screenshots/latest.png 用，不在状态里塞大字节数组
-    target_runner = runner.get(device_id) if isinstance(runner, RunnerRegistry) else runner
-    target_runner.state.last_screenshot = _write_latest_screenshot(data)
+    target_runner = runner.get(device_id)
+    if target_runner is not None:
+        target_runner.state.last_screenshot = _write_latest_screenshot(data)
     return {"url": "/api/screenshots/latest.png"}
 
 
 @app.get("/api/screenshots/latest.png")
 async def get_latest_screenshot() -> FileResponse:
-    path = (
-        runner.get(None) if isinstance(runner, RunnerRegistry) else runner
-    ).state.last_screenshot
+    path = runner.state.last_screenshot
     if not path or not path.exists():
         raise HTTPException(status_code=404, detail="暂未采集到截图")
     return FileResponse(path, media_type="image/png")
@@ -282,13 +285,11 @@ async def task_state(device_id: str | None = None) -> dict[str, object]:
     # 注册表模式：传入 device_id → 该设备自己的状态；不传 → 默认设备快照
     # （保持旧接口平铺契约），并附带按 device_id 分组的 devices 字段。
     if device_id is not None:
-        task_runner = runner.get(device_id) if isinstance(runner, RunnerRegistry) else runner
+        task_runner = runner.get(device_id)
         return task_runner.state.snapshot() if task_runner else {}
-    default_runner = runner.get(None) if isinstance(runner, RunnerRegistry) else runner
-    if default_runner is None:
-        return {"devices": runner.snapshots()}
-    snapshot = default_runner.state.snapshot()
-    if isinstance(runner, RunnerRegistry):
+    snapshot = runner.state.snapshot()
+    # 旧单 runner 场景（测试 monkeypatch 为 TaskRunner）没有多设备视图，跳过。
+    if hasattr(runner, "snapshots"):
         snapshot["devices"] = runner.snapshots()
     return snapshot
 
@@ -309,8 +310,8 @@ async def health() -> dict[str, object]:
     - runner_status: idle/starting/running/paused/stopped/done/error。
     - uptime: 进程启动到现在的秒数（容器视角的"活了多久"）。
     """
-    default_runner = runner.get(None) if isinstance(runner, RunnerRegistry) else runner
-    path = default_runner.state.last_screenshot
+    state = runner.state
+    path = state.last_screenshot
     last_screenshot_mtime: float | None = None
     if path is not None:
         try:
@@ -320,7 +321,7 @@ async def health() -> dict[str, object]:
     return {
         "status": "ok",
         "last_screenshot_mtime": last_screenshot_mtime,
-        "runner_status": default_runner.state.status,
+        "runner_status": state.status,
         "uptime": round(time.monotonic() - _APP_START_TIME, 3),
     }
 
@@ -368,8 +369,8 @@ def _wants_prometheus(accept_header: str | None) -> bool:
 
 
 def _collect_metrics_snapshot() -> dict[str, object]:
-    default_runner = runner.get(None) if isinstance(runner, RunnerRegistry) else runner
-    path = default_runner.state.last_screenshot
+    state = runner.state
+    path = state.last_screenshot
     last_screenshot_mtime: float | None = None
     if path is not None:
         try:
@@ -378,10 +379,10 @@ def _collect_metrics_snapshot() -> dict[str, object]:
             last_screenshot_mtime = None
     return {
         "process_resident_memory_bytes": _process_resident_memory_bytes(),
-        "runner_status": default_runner.state.status,
+        "runner_status": state.status,
         "last_screenshot_mtime": last_screenshot_mtime,
         "uptime_seconds": round(time.monotonic() - _APP_START_TIME, 3),
-        "tasks_started_total": default_runner.tasks_started_total,
+        "tasks_started_total": runner.tasks_started_total,
     }
 
 

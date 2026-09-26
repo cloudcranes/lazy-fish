@@ -186,9 +186,11 @@ def force_shutdown() -> None:
         from opentelemetry.sdk._shared_internal import BatchProcessor
 
         for obj in gc.get_objects():
-            if isinstance(obj, BatchProcessor) and not obj._shutdown:
+            if isinstance(obj, BatchProcessor):
                 try:
-                    obj.shutdown()
+                    # 探测私有 _shutdown 属性（pyright 会因受保护访问报错，用 getattr 绕开）
+                    if not getattr(obj, "_shutdown", True):  # pyright: ignore[reportUnknownArgumentType]
+                        obj.shutdown()
                 except Exception:
                     pass
     except Exception:

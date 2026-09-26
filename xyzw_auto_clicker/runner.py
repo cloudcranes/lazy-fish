@@ -268,6 +268,15 @@ class RunnerRegistry:
     def get(self, device_id: str | None) -> TaskRunner | None:
         return self._runners.get(device_id or "")
 
+    @property
+    def state(self) -> RunnerState:
+        """默认设备（None / ""）的 runner 状态。兼容旧单 runner API 的直接 .state 访问。"""
+        return self.get_or_create(None).state
+
+    @property
+    def tasks_started_total(self) -> int:
+        return self.get_or_create(None).tasks_started_total
+
     def snapshots(self) -> dict[str, dict[str, object]]:
         """按 device_id 分组导出全部状态；未绑定设备的任务归到空串键。"""
         return {
