@@ -345,7 +345,7 @@ PR-10 把 axe-core 拉进 CI 作为质量护栏，PR-17 把它从「过渡期 wa
 
 §3 的设计令牌（颜色 / 字号 / 间距 / 圆角 / 阴影）改了，§4 的组件 CSS 跟着改，§6 的 a11y 验收随之失守 —— 但靠 a11y 检测不出来。CSS 层级抖动（垂直居中差 1px、字号变化、图标换位）axe-core 不会报，smoke.mjs 也不会断言"长成什么样"，结果就是 PR 合了之后用户看到"控制台按钮位置和昨天不一样"。
 
-PR-18 用 **pixelmatch** 在 CI 上把"长成什么样"锁住：
+PR-18 用 **pixelmatch** 在 CI 上把"长成什么样"锁住，PR-20 把它从"过渡期 warn"升到合并门槛：
 
 ### 12.1 依赖与驱动
 
@@ -362,16 +362,20 @@ PR-18 用 **pixelmatch** 在 CI 上把"长成什么样"锁住：
   2. 装依赖：`npm ci && npx playwright install --with-deps chromium`
   3. 确认改动是预期的（不是误改），跑：`npm run test:visual:update`
   4. **逐图人工核对** `tests/ui/baselines/*.png` 与改动前的版本（git diff 不可视化 PNG，**必须用图像浏览器或 PR review 的 image diff**）—— 确认没有把"按钮错位"也写进 baseline
-  5. 提交 `tests/ui/baselines/*.png` 与样式改动一起进 PR；CI 在 PR 上 `continue-on-error`，但 `tests/ui/diffs/*.diff.png` 会作为 artifact 上传，reviewer 二次核对
-  6. 合并到 main 后 main 上 fail-fast，新 baseline 是合并门槛
+  5. 提交 `tests/ui/baselines/*.png` 与样式改动一起进 PR；CI 在 PR 上 fail-fast（合并门槛，PR-20 起），但 `tests/ui/diffs/*.diff.png` 会作为 artifact 上传，reviewer 二次核对
+  6. 合并到 main 后 main 上同样 fail-fast，新 baseline 是合并门槛
 - **禁直推 main 重生成**：baseline 变动必须走 PR + 人工审 diff 图，避免误把"渲染异常"当"正常样式"固化下来。
 
 ### 12.3 CI 编排
 
 - **Job**：`visual` job（`needs: docker-up`，复用 §11 的懒鱼容器；先 `npm ci` + `npx playwright install --with-deps chromium`，再 `node tests/ui/visual.mjs`）。
-- **PR vs main 策略**：PR 上 `continue-on-error: true`，main 上 fail-fast —— 与 §11 PR-10 引入期同策略：baseline 漂移可能在多平台字体差异下刷出少量噪声，给作者留"先合并、后修"的过渡期；axe 规则清理 / 字体稳定后，删掉 `continue-on-error` 即可升级为合并门槛（同 §11.3 的演进路径）。
+- **PR vs main 策略（PR-20 起：合并门槛）**：PR + main 都 fail-fast —— `visual` job 已摘除 `continue-on-error`，与 §11 a11y job 同语义（PR-17 那一波）。这与 lint / test job 的「PR 上 warn、main 上 fail」彻底脱钩：visual 走的是「PR 上即阻塞」路径，与 release 流程同等级。
+- **从过渡期到合并门槛的演进**：
+  - PR-18 引入期：PR 上 `continue-on-error: ${{ github.event_name == 'pull_request' }}`，main 上 fail-fast —— baseline 漂移可能在多平台字体差异下刷出少量噪声，给作者留"先合并、后修"的过渡期（与 §11 PR-10 同策略）。
+  - PR-20 升级：baseline 已稳定（playwright chromium 锁 1.49.x 主线版，跨平台字体子像素抗锯齿差异收敛；阈值 0.1% 不再被抖动刷出），删除 `continue-on-error` 即升级为合并门槛，演进路径同 §11.3。
+  - 与 a11y job 同语义（PR-17 那一波）：visual 现在也走"PR 上即阻塞"路径，与 release 流程同等级；baseline 变动必须走 PR + 人工审 diff 图，禁直推 main 重生成。
 - **Diff 工件**：`if: failure()` 时把 `tests/ui/diffs/*.diff.png` 作为 artifact 上传（`actions/upload-artifact@v4`），reviewer 在 PR 上能直接看到差异像素位置。
-- **退出码语义**（与 §11 a11y 同约定）：
+- **退出码语义**（与 §11 a11y 同约定；脚本顶部注释已显式写出，见 `tests/ui/visual.mjs` 顶部）：
   - `0`：5 视图全部 ≤ 阈值（含 baseline_created / baseline_updated）。
   - `1`：有视图超阈值或尺寸不匹配。
   - `2`：环境起不来（端口未通、`docker-up` 健康检查超时、`npm ci` / `npx playwright install` 失败等）。
@@ -390,5 +394,12 @@ PR-18 用 **pixelmatch** 在 CI 上把"长成什么样"锁住：
 - 调到 `0%`（精确比对）：被字体子像素抗锯齿差异、运行中状态环的微小呼吸直接打死 —— 全平台字体回退一致才有可能通过。
 - 调到 `1%`：把"按钮内边距错 2px"这种肉眼可见的变化漏掉。
 - `0.1%`（`0.001`）：是"人眼看不出差异，但 pixelmatch 能区分真改"的下限 —— 本仓库采用此值。
+
+### 12.6 Baseline 稳定性（PR-20）
+
+阈值稳定的前提是 baseline 不被无关因素刷出 diff，下列两条是 PR-20 升级合并门槛时的硬约束：
+
+- **浏览器锁定**：playwright chromium 必须走 **1.49.x 主线版**（仓根 `package.json` 与 `tests/ui/package.json` devDeps 均声明 `playwright: ^1.49.0`）。如出现跨平台字体差异（Linux runner 上 Noto/Sans 字体回退与作者本机 macOS/Windows 字体不一致 → 文本子像素抗锯齿漂移 → pixelmatch 在 0.1% 阈值下刷出零星 diff），不要放宽阈值；优先校验 playwright 版本是否被自动跳到 1.50+。如确需升级，必须同步跑一次 baseline 全量回归（5 视图逐图人工核对）再合入。
+- **PNG 编码稳定**：`pixelmatch({ threshold: 0 })` 与 PNG byte-level 比对相比，对图像编码抖动宽容；但 baseline 一旦入库就不要改 pngjs / fs-extra / pixelmatch 主版本——同样的像素输入，不同版本可能产生不同 diff 图（artifact 可视化口径会变），升级需要与 baseline 全量回归同步评估。
 
 > **不需要单独跑视觉回归**：CI 已经把 visual 跑在 `docker-up` 起的真容器上。本地想调试时：`docker compose up -d lazy-fish` → `npm ci && npx playwright install chromium` → `node tests/ui/visual.mjs`（baseline 缺失会自动生成）。想强制覆盖 baseline：`node tests/ui/visual.mjs --update-baseline` 或 `npm run test:visual:update`。

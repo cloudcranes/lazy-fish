@@ -1,6 +1,11 @@
 // 视觉回归：Playwright 拉五个视图截图，与 tests/ui/baselines/*.png 比对；
 // pixelmatch 阈值 0.1% diff（≤ 0.001 的比例视为像素差异）。
 //
+// 退出码契约（PR-20 重申，与 a11y.mjs §11 一致）：
+//   - 0：5 视图全部 ≤ 阈值（含 BASELINE_CREATED / BASELINE_UPDATED）。
+//   - 1：有视图 FAIL（ratio > 0.001）或 SIZE_MISMATCH。
+//   - 2：环境不可用（端口未通 / docker-up 健康检查超时 / npm ci / playwright install 失败等）。
+//
 // 设计要点：
 //   - 与 a11y.mjs 共用同一套视图枚举与 hash 切换时序，保证"视图-视角"一致：
 //     console / plans / templates / capture / logs 五张图，覆盖首屏与 4 个二级视图。
@@ -15,10 +20,14 @@
 //   - 阈值 0.001（0.1%）：容忍极少量像素抖动（动画残留、状态点呼吸），挡得住
 //     真实改动（字号 / 间距 / 颜色变化必然 > 1%）。阈值不是"完美比对"，是
 //     "样式层实质变更"探测。
-//   - 退出码：0=全部视图 ≤ 阈值；1=有视图超阈值；2=环境起不来（端口未通 / 依赖未装）。
+//   - 浏览器锁定 playwright chromium 主线版 1.49.x（仓根 package.json devDeps
+//     `playwright: ^1.49.0`），收敛跨平台字体差异——避免在 Ubuntu runner 上
+//     因字体子像素抗锯齿漂移刷出零星 diff，让 0.1% 阈值稳定可重复。
 //   - 第一次运行（baseline 缺失）会**生成** baseline 并视为通过 —— 与
 //     docs/UI-DESIGN.md §12「baseline 缺失 = 初始化」一致。后续 PR 应带 baseline。
 //     维护者如需重生成，传递 `--update-baseline` 强制覆盖。
+//   - 合并门槛（PR-20 起）：CI 上 visual job 已无 `continue-on-error`，PR + main
+//     均 fail-fast；baseline 变动必须走 PR + 人工审 diff 图，禁直推 main 重生成。
 import fs from "node:fs";
 import path from "node:path";
 import { fileURLToPath } from "node:url";

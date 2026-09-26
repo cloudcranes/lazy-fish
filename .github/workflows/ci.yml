@@ -206,9 +206,11 @@ jobs:
     runs-on: ubuntu-latest
     needs: docker-up
     timeout-minutes: 15
-    # 与 a11y job 同策略：PR 上 warn（baseline 漂移可能在多平台字体差异下刷出少量噪声），
-    # main 上 fail-fast —— baseline 变动必须走 PR + 人工审 diff 图，禁直推 main 重生成。
-    continue-on-error: ${{ github.event_name == 'pull_request' }}
+    # 从 PR-20 起升级为合并门槛：PR + main 都 fail-fast。
+    # 之前的 `continue-on-error: ${{ github.event_name == 'pull_request' }}` 是 PR-18
+    # 引入期的过渡策略；baseline 已稳定（playwright chromium 锁 1.49.x 主线，跨平台字体差异收敛），
+    # 与 a11y job 同语义——「PR 上即阻塞」，与 release 流程同等级。
+    # baseline 变动必须走 PR + 人工审 diff 图，禁直推 main 重生成。
 
     steps:
       - uses: actions/checkout@v4
