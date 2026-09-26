@@ -48,7 +48,12 @@ class TaskConfig:
         return 1 if click_index == 0 and self.first_template_names else self.repeat_tap_count
 
     def match_profile(self) -> MatchProfile:
-        band = tuple(self.roi_band) if self.roi_band else None
+        band: tuple[float, float] | None
+        if self.roi_band is not None:
+            low, high = self.roi_band
+            band = (low, high)
+        else:
+            band = None
         return MatchProfile(
             scale_min=self.scale_min,
             scale_max=self.scale_max,

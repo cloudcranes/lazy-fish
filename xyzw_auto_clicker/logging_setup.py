@@ -3,6 +3,7 @@ from __future__ import annotations
 import json
 import logging
 import sys
+import typing
 from datetime import datetime, timezone
 
 """结构化日志：默认 plain，只在显式 fmt="json" 或环境变量 LOG_JSON=1 时才走 JSON。
@@ -23,10 +24,10 @@ def configure(level: int | str = "INFO", fmt: str | None = None) -> None:
     # 清掉既有 handler，避免重复输出（uvicorn、reload、pytest 都可能提前装过）
     for handler in list(root.handlers):
         root.removeHandler(handler)
-    if fmt == "json" or (fmt is None and _env_json()):
+    if fmt == "json" or (fmt is None and env_json_enabled()):
         handler: logging.Handler = _JsonHandler()
     elif fmt in (None, "plain"):
-        handler = logging.StreamHandler(sys.stdout)
+        handler = logging.StreamHandler(typing.cast(typing.IO[str], sys.stdout))
         handler.setFormatter(logging.Formatter(_DEFAULT_FMT))
     else:
         raise ValueError(f"未知 fmt: {fmt!r}")
@@ -34,17 +35,29 @@ def configure(level: int | str = "INFO", fmt: str | None = None) -> None:
     root.setLevel(level)
 
 
-def _env_json() -> bool:
+def env_json_enabled() -> bool:
+    """LOG_JSON=1 → True；其他情况 False。被 /api/metrics 复用同一套真值表。
+
+    ponytail: 公开这个常量读取比让 metrics 端点再独立判断一次更稳，避免生产环境
+    无意中暴露内存/任务计数等敏感指标时与日志开关规则漂移。
+    """
     import os
 
     return os.environ.get("LOG_JSON", "").strip() in {"1", "true", "TRUE", "yes"}
 
 
-class _JsonHandler(logging.StreamHandler):
-    """每条记录一行 JSON：timestamp/level/logger/message，extra 字段平铺到顶层。"""
+class _JsonHandler(logging.Handler):
+    """每条记录一行 JSON：timestamp/level/logger/message，extra 字段平铺到顶层。
+
+    ponytail: 不继承 StreamHandler——typeshed 把 StreamHandler 的 _StreamT 上界标成
+    SupportsWrite[str]，跟 sys.stdout（TextIO）常量推断在 strict 模式下冲突，
+    子类化会让 formatException / self.stream / write / flush 一连串报 Unknown。
+    改成直接继承 Handler + 自己持有 stdout 引用，类型完全可控。
+    """
 
     def __init__(self) -> None:
-        super().__init__(sys.stdout)
+        super().__init__()
+        self._stream: typing.IO[str] = sys.stdout
 
     def emit(self, record: logging.LogRecord) -> None:
         try:
@@ -66,9 +79,12 @@ class _JsonHandler(logging.StreamHandler):
                 except TypeError:
                     payload[key] = repr(value)
             if record.exc_info:
-                payload["exc_info"] = self.formatException(record.exc_info)
-            self.stream.write(json.dumps(payload, ensure_ascii=False) + "\n")
-            self.stream.flush()
+                # logging.Handler.formatException 走的是 sys.exc_info() 重载，
+                # 给 exc_info tuple 触发同一条路径，类型签名是 str。
+                payload["exc_info"] = self.format(record)
+            line = json.dumps(payload, ensure_ascii=False) + "\n"
+            self._stream.write(line)
+            self._stream.flush()
         except Exception:  # noqa: BLE001  日志失败绝不能拖垮业务
             self.handleError(record)
 

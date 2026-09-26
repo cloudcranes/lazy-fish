@@ -5,6 +5,7 @@ import subprocess
 import time
 from collections import OrderedDict
 from dataclasses import dataclass
+from typing import IO
 
 _POOL_MAX_SIZE = 5
 _POOL_IDLE_SECONDS = 60.0
@@ -27,7 +28,7 @@ class AdbError(RuntimeError):
 
 @dataclass
 class _Slot:
-    proc: subprocess.Popen
+    proc: subprocess.Popen[bytes]
     last_used: float
 
 
@@ -53,7 +54,7 @@ class _ProcPool:
         if slot is not None:  # 进程已死，清掉
             self._slots.pop(device_id, None)
         try:
-            proc = subprocess.Popen(
+            proc: subprocess.Popen[bytes] = subprocess.Popen(
                 [adb_path, "-s", device_id, "shell"],
                 stdin=subprocess.PIPE,
                 stdout=subprocess.DEVNULL,
@@ -96,6 +97,16 @@ class _ProcPool:
             self._kill_slot(key, slot)
         self._slots.clear()
 
+    def evict(self, device_id: str) -> None:
+        """显式淘汰某台设备的 shell 长连接（BrokenPipeError / OSError 后调用）。
+
+        ponytail: 调用方在跨模块位置，没有外部走 _slots 的需要时给一条 public 通道
+        比 # noqa: SLF001 私有访问更稳——加新调用方不会再复制一份私有访问。
+        """
+        slot = self._slots.pop(device_id, None)
+        if slot is not None:
+            self._kill_slot(device_id, slot)
+
 
 class AdbClient:
     def __init__(self, adb_path: str = "adb", timeout_seconds: float = 10) -> None:
@@ -109,7 +120,7 @@ class AdbClient:
             # 用 Popen + communicate(timeout=…) 取代 subprocess.run：
             # run 的 timeout=… 是「读 PIPE 阶段」的超时，进程本身不会被杀，
             # 卡死的 ADB 子进程会一直挂到下一次 shell。
-            proc = subprocess.Popen(
+            proc: subprocess.Popen[bytes] = subprocess.Popen(
                 [self.adb_path, *args],
                 stdin=subprocess.PIPE if input_bytes is not None else None,
                 stdout=subprocess.PIPE,
@@ -170,13 +181,14 @@ class AdbClient:
 
         def call() -> None:
             slot = self._pool.get_or_create(device_id, self.adb_path)
-            assert slot.proc.stdin is not None
+            stdin: IO[bytes] | None = slot.proc.stdin
+            assert stdin is not None
             try:
-                slot.proc.stdin.write(cmd)
-                slot.proc.stdin.flush()
+                stdin.write(cmd)
+                stdin.flush()
             except (BrokenPipeError, OSError) as exc:
                 # 池里的 shell 进程已死，淘汰后让上层重试 / 报 NOT_AVAILABLE
-                self._pool._slots.pop(device_id, None)  # noqa: SLF001
+                self._pool.evict(device_id)
                 raise AdbError(
                     f"adb shell 长连接不可用：{device_id}",
                     code="NOT_AVAILABLE",

@@ -7,6 +7,7 @@ import re
 import tempfile
 from dataclasses import dataclass
 from pathlib import Path
+from typing import Any
 
 from pydantic import BaseModel, ConfigDict, Field, ValidationError, field_validator
 
@@ -20,21 +21,23 @@ PLAN_DIR.mkdir(parents=True, exist_ok=True)
 
 # 裁剪参数：值域上限取 1080p 全屏截图为基线（1920×1080）外加一倍冗余，
 # 桌面截屏 / 高分屏画面偶尔会跨到 4096；写死 8192 既能挡住脏值，又不会误伤真实截图。
-_CROP_MAX_DIM = 8192
+CROP_MAX_DIM = 8192
 # 裁剪面积上限 = 1080p 全屏（防「整张图覆盖」误存为模板）
-_CROP_MAX_AREA = 1920 * 1080
+CROP_MAX_AREA = 1920 * 1080
 
 
-def _safe_field_name(value: object) -> str:
+def safe_field_name(value: object) -> int:
     """统一裁剪字段：必须是整数、0 ≤ value ≤ _CROP_MAX_DIM。
 
     用来给 PlanPayload.crop / CropRequest 做边界校验，避免负数、超大值绕过校验。
     抛出 ValueError 让 pydantic / FastAPI 转成 400 + 可读 message。
+    返回 int 是历史约定：CropRequest._validate_geometry 也用它做 ge/gt 校验，
+    返回 str 会破坏类型契约（参见 app.py / plans.py 字段类型）。
     """
     if isinstance(value, bool) or not isinstance(value, int):
         raise ValueError("必须是整数")
-    if value < 0 or value > _CROP_MAX_DIM:
-        raise ValueError(f"必须在 0 到 {_CROP_MAX_DIM} 之间")
+    if value < 0 or value > CROP_MAX_DIM:
+        raise ValueError(f"必须在 0 到 {CROP_MAX_DIM} 之间")
     return value
 
 
@@ -70,17 +73,17 @@ class PlanPayload(BaseModel):
         cleaned: dict[str, int] = {}
         for key in ("x", "y", "width", "height"):
             raw = value.get(key)
-            cleaned[key] = int(_safe_field_name(raw))
+            cleaned[key] = int(safe_field_name(raw))
         if cleaned["width"] <= 0 or cleaned["height"] <= 0:
             raise ValueError("裁剪尺寸必须大于 0")
         if cleaned["x"] < 0 or cleaned["y"] < 0:
             raise ValueError("裁剪起点不能为负")
-        if cleaned["x"] + cleaned["width"] > _CROP_MAX_DIM:
+        if cleaned["x"] + cleaned["width"] > CROP_MAX_DIM:
             raise ValueError("裁剪范围超出右边界")
-        if cleaned["y"] + cleaned["height"] > _CROP_MAX_DIM:
+        if cleaned["y"] + cleaned["height"] > CROP_MAX_DIM:
             raise ValueError("裁剪范围超出下边界")
-        if cleaned["width"] * cleaned["height"] > _CROP_MAX_AREA:
-            raise ValueError(f"裁剪面积超过 {_CROP_MAX_AREA} 像素，疑似全图覆盖")
+        if cleaned["width"] * cleaned["height"] > CROP_MAX_AREA:
+            raise ValueError(f"裁剪面积超过 {CROP_MAX_AREA} 像素，疑似全图覆盖")
         return cleaned
 
 
@@ -102,7 +105,7 @@ class PlanPayloadStrict(PlanPayload):
 class SavedPlan:
     name: str
     filename: str
-    payload: dict[str, object]
+    payload: dict[str, Any]
     default: bool = False
 
 
@@ -154,7 +157,7 @@ def list_plans() -> list[SavedPlan]:
     return sorted(plans, key=lambda item: (not item.default, item.name))
 
 
-def _normalize_loaded_payload(raw: dict[str, object]) -> dict[str, object]:
+def _normalize_loaded_payload(raw: dict[str, object]) -> dict[str, Any]:
     """Load plan payload with pydantic v2 model_validate + strict mode.
 
     严格模式 = 未知字段拒收 + 类型严格；缺字段走 PlanPayload 默认值兜底并记日志。
@@ -177,9 +180,10 @@ def save_plan(req: PlanSaveRequest) -> SavedPlan:
     path = PLAN_DIR / filename
     if req.default:
         _clear_default_flags(filename)
-    data = {"name": req.name, "payload": req.payload.model_dump(), "default": req.default}
+    payload_dump: dict[str, Any] = req.payload.model_dump()
+    data = {"name": req.name, "payload": payload_dump, "default": req.default}
     _write_json(path, data)
-    return SavedPlan(name=req.name, filename=filename, payload=data["payload"], default=req.default)
+    return SavedPlan(name=req.name, filename=filename, payload=payload_dump, default=req.default)
 
 
 def ensure_default_plan() -> SavedPlan | None:
@@ -286,7 +290,7 @@ def _clear_default_flags(skip_filename: str) -> None:
             _write_json(path, data)
 
 
-def _write_json(path: Path, data: dict[str, object]) -> None:
+def _write_json(path: Path, data: dict[str, Any]) -> None:
     fd, tmp_name = tempfile.mkstemp(prefix=f".{path.name}.", suffix=".tmp", dir=PLAN_DIR)
     try:
         with os.fdopen(fd, "w", encoding="utf-8") as file:

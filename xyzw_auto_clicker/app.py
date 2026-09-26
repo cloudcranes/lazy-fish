@@ -17,16 +17,17 @@ from pydantic import BaseModel, Field, field_validator, model_validator
 
 from .adb import AdbClient
 from .logging_setup import configure as _configure_logging
+from .logging_setup import env_json_enabled
 from .matcher import ImageMatcher
 from .plans import (
-    _CROP_MAX_AREA,
+    CROP_MAX_AREA,
     PlanPayload,
     PlanSaveRequest,
-    _safe_field_name,
     delete_plan,
     ensure_default_plan,
     list_plans,
     load_plan,
+    safe_field_name,
     save_plan,
 )
 from .runner import TaskRunner
@@ -82,16 +83,16 @@ class CropRequest(BaseModel):
     @field_validator("x", "y", "width", "height")
     @classmethod
     def _validate_geometry(cls, value: int) -> int:
-        # 复用 plans._safe_field_name：与 PlanPayload.crop 走同一道闸，
+        # 复用 plans.safe_field_name：与 PlanPayload.crop 走同一道闸，
         # 上限 8192 防超大值绕过校验；负数由 Field(ge=0) 拒收。
-        return _safe_field_name(value)
+        return safe_field_name(value)
 
     @model_validator(mode="after")
     def _validate_area(self) -> CropRequest:
         # 防「整张图覆盖」：裁剪面积超过 1080p 全屏时拒绝，怀疑值被前端 bug 写成全屏。
         # 注意这里不校 x+w / y+h，因为服务端要拿到截图后再判断；这里只挡面积超界。
-        if self.width * self.height > _CROP_MAX_AREA:
-            raise ValueError(f"裁剪面积超过 {_CROP_MAX_AREA} 像素，疑似全图覆盖")
+        if self.width * self.height > CROP_MAX_AREA:
+            raise ValueError(f"裁剪面积超过 {CROP_MAX_AREA} 像素，疑似全图覆盖")
         return self
 
 
@@ -268,7 +269,7 @@ async def health() -> dict[str, object]:
 async def metrics() -> Response:
     """运行时指标：仅 LOG_JSON=1 启用（容器化部署默认关闭，开发期手动开）。
 
-    ponytail: 与 logging_setup._env_json 走同一套开关，确保「结构化日志 + 指标端点」
+    ponytail: 与 logging_setup.env_json_enabled 走同一套开关，确保「结构化日志 + 指标端点」
     同步启用——避免生产环境无意中暴露进程内存 / 任务计数等敏感指标。
     字段顺序稳定，便于 Prometheus / VictoriaMetrics 文本解析。
     """
@@ -297,11 +298,9 @@ async def metrics() -> Response:
 def _metrics_enabled() -> bool:
     """LOG_JSON=1 → /api/metrics 同步开启；其他情况返回 404。
 
-    与 logging_setup._env_json 复用同一套真值表，避免两边规则漂移。
+    与 logging_setup.env_json_enabled 复用同一套真值表，避免两边规则漂移。
     """
-    from .logging_setup import _env_json
-
-    return _env_json()
+    return env_json_enabled()
 
 
 def _process_resident_memory_bytes() -> int:

@@ -137,7 +137,12 @@ def frame_fingerprint(png_bytes: bytes) -> np.ndarray | None:
     global _fingerprint_cache
     if _fingerprint_cache is not None and _fingerprint_cache[0] is png_bytes:
         return _fingerprint_cache[1]
-    array = np.frombuffer(png_bytes, dtype=np.uint8)
+    # np.frombuffer 的返回类型在 typeshed 里是 ndarray[Unknown]，
+    # pyright 把 buffer=bytes 视为未知来源；这里直接构造 ndarray 走 buffer= 形参，
+    # 类型完全可控，省一次"未知"推断。
+    array: np.ndarray = np.ndarray(
+        shape=(len(png_bytes),), dtype=np.uint8, buffer=memoryview(png_bytes)
+    )
     image = cv2.imdecode(array, cv2.IMREAD_GRAYSCALE)
     if image is None:
         _fingerprint_cache = (png_bytes, None)
@@ -264,17 +269,20 @@ class ImageMatcher:
             and now - entry.memory_at <= HOT_PATH_TTL_SECONDS
         )
         if memory_alive:
+            # memory_alive 仅在 entry.memory_scale is not None 时为 True
+            assert entry.memory_scale is not None
+            memory_scale: float = entry.memory_scale
             if entry.memory_box is not None:
                 window = self._window_rect(
-                    screenshot, template, *entry.memory_box, entry.memory_scale
+                    screenshot, template, *entry.memory_box, memory_scale
                 )
-                hit = self._scan(screenshot, entry, [entry.memory_scale], window, precise=True)
+                hit = self._scan(screenshot, entry, [memory_scale], window, precise=True)
                 if hit is not None and hit.score >= threshold:
                     entry.memory_box = (hit.x, hit.y)
                     entry.memory_at = now
                     return hit
             # 位置变了（换页面/换活动）→ 退回 ROI 全区域复核同一档
-            hit = self._scan(screenshot, entry, [entry.memory_scale], roi, precise=True)
+            hit = self._scan(screenshot, entry, [memory_scale], roi, precise=True)
             if hit is not None and hit.score >= threshold:
                 entry.memory_box = (hit.x, hit.y)
                 entry.memory_at = now
@@ -513,7 +521,12 @@ class ImageMatcher:
         encoded.tofile(path)
 
     def _decode(self, png_bytes: bytes) -> np.ndarray:
-        array = np.frombuffer(png_bytes, dtype=np.uint8)
+        # np.frombuffer 的返回类型在 typeshed 里是 ndarray[Unknown]，
+        # pyright 把 buffer=bytes 视为未知来源；这里直接构造 ndarray 走 buffer= 形参，
+        # 类型完全可控，省一次"未知"推断。
+        array: np.ndarray = np.ndarray(
+            shape=(len(png_bytes),), dtype=np.uint8, buffer=memoryview(png_bytes)
+        )
         image = cv2.imdecode(array, cv2.IMREAD_COLOR)
         if image is None:
             raise ValueError("截图解码失败")

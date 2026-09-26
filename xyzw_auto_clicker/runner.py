@@ -77,6 +77,9 @@ class TaskRunner:
             await self._task
 
     async def _run(self, config: TaskConfig) -> None:
+        # 局部别名：self.state 在 await 之后可能被外层换掉（start/stop 边界），
+        # 但本轮状态绑死在入口处的 self.state 上，pyright 推断不出这点要显式收窄。
+        state: RunnerState = self.state
         try:
             for second in range(3, 0, -1):
                 self._log(f"{second} 秒后开始，请确认游戏停在宝箱活动页")
@@ -85,7 +88,6 @@ class TaskRunner:
                     self.state.status = "stopped"
                     return
             self.state.status = "running"
-            state = self.state
             adb = self.adb
             device_id = config.device_id
             interval = config.interval_seconds

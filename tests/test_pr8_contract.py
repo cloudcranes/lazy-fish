@@ -1,7 +1,7 @@
 """PR-8 契约硬化 端到端 smoke。
 
 每条断言对应任务清单里的一项：
-  (1) plans._safe_field_name + PlanPayload.crop 校验 x,y,w,h 边界 + 面积上限；
+  (1) plans.safe_field_name + PlanPayload.crop 校验 x,y,w,h 边界 + 面积上限；
       CropRequest 复用同一道闸（字段层 + model 层 area 校验）；
   (2) matcher hot-path memory TTL 60s（过期强制回退 ROI）；
       _roi_rect_cache 改 OrderedDict + ROI_CACHE_MAXSIZE=128 LRU；
@@ -90,18 +90,18 @@ def _install_stubs(tmp_path, monkeypatch, *, log_json: str | None = None):
 
 
 def test_safe_field_name_accepts_zero_and_max_boundary() -> None:
-    """_safe_field_name 必须接受 0 与上限值，拒绝负数 / 越界 / 非整数 / 布尔。"""
-    from xyzw_auto_clicker.plans import _CROP_MAX_DIM, _safe_field_name
+    """safe_field_name 必须接受 0 与上限值，拒绝负数 / 越界 / 非整数 / 布尔。"""
+    from xyzw_auto_clicker.plans import CROP_MAX_DIM, safe_field_name
 
-    assert _safe_field_name(0) == 0
-    assert _safe_field_name(_CROP_MAX_DIM) == _CROP_MAX_DIM
-    assert _safe_field_name(1920) == 1920
-    for bad in (-1, _CROP_MAX_DIM + 1, 999999):
+    assert safe_field_name(0) == 0
+    assert safe_field_name(CROP_MAX_DIM) == CROP_MAX_DIM
+    assert safe_field_name(1920) == 1920
+    for bad in (-1, CROP_MAX_DIM + 1, 999999):
         with pytest.raises(ValueError):
-            _safe_field_name(bad)
+            safe_field_name(bad)
     for bad in ("0", 0.5, None, True, [0]):
         with pytest.raises(ValueError):
-            _safe_field_name(bad)
+            safe_field_name(bad)
 
 
 def test_plan_payload_crop_accepts_valid_payload() -> None:
@@ -159,13 +159,13 @@ def test_plan_payload_crop_rejects_oversize_dim() -> None:
 
 
 def test_crop_request_validator_uses_safe_field_name() -> None:
-    """CropRequest.x/y/width/height 必须走 _safe_field_name（同源校验）。"""
+    """CropRequest.x/y/width/height 必须走 safe_field_name（同源校验）。"""
     from xyzw_auto_clicker.app import CropRequest
 
     # 边界值通过
     req = CropRequest(name="box.png", x=0, y=0, width=1920, height=1080)
     assert req.x == 0 and req.width == 1920
-    # 越界拒收（_safe_field_name 把 8193 转成 ValueError，pydantic 包成 ValidationError）
+    # 越界拒收（safe_field_name 把 8193 转成 ValueError，pydantic 包成 ValidationError）
     from pydantic import ValidationError
 
     with pytest.raises(ValidationError):
@@ -173,7 +173,7 @@ def test_crop_request_validator_uses_safe_field_name() -> None:
 
 
 def test_crop_request_rejects_oversize_area() -> None:
-    """CropRequest 必须在 model_validator 里复用 _CROP_MAX_AREA 拒全图覆盖。"""
+    """CropRequest 必须在 model_validator 里复用 CROP_MAX_AREA 拒全图覆盖。"""
     from pydantic import ValidationError
 
     from xyzw_auto_clicker.app import CropRequest
