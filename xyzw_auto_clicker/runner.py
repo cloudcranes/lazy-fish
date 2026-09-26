@@ -54,6 +54,9 @@ class TaskRunner:
         self._stop_event = asyncio.Event()
         # 上一张已确认静止的画面指纹，作为下一轮"是否静止"的基准
         self._stable_frame: np.ndarray | None = None
+        # 累计启动次数：暴露给 /api/metrics，长跑进程累计即可，不需要并发锁
+        # （start/stop 调用方都在 asyncio 事件循环内，单线程串行）。
+        self.tasks_started_total = 0
 
     def running(self) -> bool:
         return self._task is not None and not self._task.done()
@@ -65,6 +68,7 @@ class TaskRunner:
         self._stop_event.clear()
         self._stable_frame = None
         self.state = RunnerState(status="starting", target=config.click_count)
+        self.tasks_started_total += 1
         self._task = asyncio.create_task(self._run(config))
 
     async def stop(self) -> None:

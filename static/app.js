@@ -88,15 +88,19 @@ const LONG_RUN_SECONDS = 30 * 60;
    基础工具
    -------------------------------------------------------------------------- */
 
-const TOAST_MAX = 5;
+/* toast 区域：role=status + aria-live=polite 的屏幕阅读器公告。
+   限制同时只展示 1 条主信息 —— 屏幕阅读器同时播报多条会糊成一团。
+   新 toast 直接替换旧的（而不是叠加），保证「最新一条」永远是当前重点。 */
+const TOAST_TTL_MS = 3600;
 
 function toast(message, type = "error") {
   const host = $("toastHost");
-  // 上限 5 条：超出时按 FIFO 把最早一条立刻移除，避免错误风暴把屏幕挤满。
-  while (host.children.length >= TOAST_MAX) {
-    const oldest = host.firstElementChild;
-    if (!oldest) break;
-    host.removeChild(oldest);
+  if (!host) return;
+  // 同一时间只显示一条主信息：替换而非叠加，避免错误风暴把屏幕挤满，
+  // 也避免 aria-live 同时播报多条把屏幕阅读器打断。
+  for (const child of [...host.children]) {
+    child.classList.add("is-out");
+    child.remove();
   }
   const item = document.createElement("div");
   item.className = `toast is-${type}`;
@@ -111,7 +115,7 @@ function toast(message, type = "error") {
     item.classList.add("is-out");
     setTimeout(() => item.remove(), 200);
   };
-  setTimeout(remove, 3600);
+  setTimeout(remove, TOAST_TTL_MS);
 }
 
 function friendlyError(message) {
@@ -1642,5 +1646,29 @@ document.addEventListener("visibilitychange", () => {
     stopStatePolling();
   } else {
     startStatePolling();
+  }
+});
+
+/* 焦点 / 网络事件：tab 失焦（用户切走窗口）立即停轮询避免空转；离线立刻停 + 上线立刻补一轮。
+   与 visibilitychange 互补：visibilitychange 解决"页面在后台 tab 折叠"，
+   focus/blur 解决"页面在前台但用户切到别的窗口 / 应用"。
+   online/offline 处理网线被拔、Wi-Fi 断开等 visibility 不变的场景。 */
+window.addEventListener("blur", () => {
+  if (!document.hidden) stopStatePolling();
+});
+window.addEventListener("focus", () => {
+  if (!document.hidden) {
+    startStatePolling();
+    // 立刻补一轮：切回来时不要等下一个 idle 回调
+    pollState();
+  }
+});
+window.addEventListener("offline", () => {
+  stopStatePolling();
+});
+window.addEventListener("online", () => {
+  if (!document.hidden) {
+    startStatePolling();
+    pollState();
   }
 });

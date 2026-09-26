@@ -1,7 +1,8 @@
 from __future__ import annotations
 
 import logging
-from collections import deque
+import time
+from collections import OrderedDict, deque
 from dataclasses import dataclass
 from pathlib import Path
 
@@ -100,10 +101,12 @@ class _Hit:
 class _TemplateEntry:
     mtime: float
     image: np.ndarray
-    # 上次命中的尺度与左上角。连续命中时只在这个尺度 + 这个位置的小窗里复核（热路径），
-    # 跌出阈值或位置变化才回到完整流程重新定位。
+    # 上次命中的尺度与左上角 + 命中时间戳。连续命中时只在这个尺度 + 这个位置的小窗里
+    # 复核（热路径），跌出阈值或位置变化才回到完整流程重新定位；
+    # 时间戳超过 HOT_PATH_TTL_SECONDS 强制把热路径标记为失效，回退 ROI 全区域。
     memory_scale: float | None = None
     memory_box: tuple[int, int] | None = None
+    memory_at: float = 0.0
 
 
 # 降采样后模板/区域的最小边长，低于它就放弃降采样直接全分辨率扫（小图专用兜底）
@@ -113,6 +116,14 @@ MIN_COARSE_REGION_PIXELS = 16
 # 模板缓存上限：超出按 mtime 淘汰最旧的一个。16 对应 4 个默认按钮 × 4 个活动期，每个
 # 活动期都会换一遍同名按钮，留一倍余量防 OOM。
 TEMPLATES_CACHE_LIMIT = 16
+
+# 热路径记忆的 TTL：超过 60s 视作「换页 / 换活动」，强制回退 ROI 全区域重新定位，
+# 避免拿着陈旧的尺度+位置死认。实测宝箱活动一轮 ~12s，60s 足以容纳多次暂停。
+HOT_PATH_TTL_SECONDS = 60.0
+
+# ROI 矩形缓存上限：同一帧内 N 个模板共用一份矩形，但跨分辨率/跨 profile.roi_band
+# 切换时也要算独立条目；128 条覆盖「4 模板 × 32 档 roi_band」绰绰有余。
+ROI_CACHE_MAXSIZE = 128
 
 
 _fingerprint_cache: tuple[bytes, np.ndarray | None] | None = None
@@ -148,7 +159,8 @@ class ImageMatcher:
     # ROI 矩形计算结果缓存：(height, width, band) -> (left, top, width, height)
     # 同一帧里 _roi_band_rect 会被调用多次（每个模板一次），但画面尺寸与 profile.roi_band
     # 在一轮里都是常量——把结果缓存住，避免每帧每模板都重算 int(...)。
-    _roi_rect_cache: dict[tuple[int, int, tuple[float, float] | None], tuple[int, int, int, int]] = {}
+    # ponytail: 改 OrderedDict+maxsize 实现 LRU；超过 ROI_CACHE_MAXSIZE 按插入序淘汰。
+    _roi_rect_cache: OrderedDict[tuple[int, int, tuple[float, float] | None], tuple[int, int, int, int]] = OrderedDict()
 
     def __init__(self, template_dir: Path) -> None:
         self.template_dir = template_dir
@@ -197,6 +209,14 @@ class ImageMatcher:
         """模板被覆盖或删除后调用，丢弃模板缓存与尺度记忆。"""
         self._templates.clear()
 
+    @classmethod
+    def clear_class_cache(cls) -> None:
+        """清掉 class 级 ROI 矩形缓存；测试或长跑进程跨分辨率切换时手动调一下。
+
+        ponytail: 类级缓存跨实例共享，外部若不主动清就要等 LRU 自然淘汰。
+        """
+        cls._roi_rect_cache.clear()
+
     def crop_template(self, screenshot_png: bytes, x: int, y: int, width: int, height: int, output_path: Path) -> None:
         image = self._decode(screenshot_png)
         image_height, image_width = image.shape[:2]
@@ -221,24 +241,37 @@ class ImageMatcher:
         roi = self._roi_band_rect(screenshot, profile)
 
         # ① 热路径：沿用上次命中的尺度 + 位置，只在那一小块里复核
-        if entry.memory_scale is not None:
+        # 时间戳超过 HOT_PATH_TTL_SECONDS → 视作「换页/换活动」，强制放弃记忆回到 ROI
+        now = time.monotonic()
+        memory_alive = (
+            entry.memory_scale is not None
+            and now - entry.memory_at <= HOT_PATH_TTL_SECONDS
+        )
+        if memory_alive:
             if entry.memory_box is not None:
                 window = self._window_rect(screenshot, template, *entry.memory_box, entry.memory_scale)
                 hit = self._scan(screenshot, entry, [entry.memory_scale], window, precise=True)
                 if hit is not None and hit.score >= threshold:
                     entry.memory_box = (hit.x, hit.y)
+                    entry.memory_at = now
                     return hit
             # 位置变了（换页面/换活动）→ 退回 ROI 全区域复核同一档
             hit = self._scan(screenshot, entry, [entry.memory_scale], roi, precise=True)
             if hit is not None and hit.score >= threshold:
                 entry.memory_box = (hit.x, hit.y)
+                entry.memory_at = now
                 return hit
+        elif entry.memory_scale is not None:
+            # TTL 过期：清掉记忆（不直接删字段，保留时间戳便于排查），走 ROI
+            entry.memory_scale = None
+            entry.memory_box = None
+            entry.memory_at = 0.0
 
         # ② ROI 内定位：命中即返回，不再白扫一遍全图
         scales = profile.scales()
         hit = self._locate(screenshot, entry, roi, scales, threshold, profile, roi_like=True)
         if hit is not None:
-            self._remember(entry, hit)
+            self._remember(entry, hit, now)
             return hit
 
         # ③ 回退全图：按钮不在 ROI 带里（或画面里本来就没有按钮）
@@ -246,14 +279,15 @@ class ImageMatcher:
         if full != roi:
             hit = self._locate(screenshot, entry, full, scales, threshold, profile, roi_like=False)
             if hit is not None:
-                self._remember(entry, hit)
+                self._remember(entry, hit, now)
                 return hit
         return None
 
     @staticmethod
-    def _remember(entry: _TemplateEntry, hit: _Hit) -> None:
+    def _remember(entry: _TemplateEntry, hit: _Hit, now: float | None = None) -> None:
         entry.memory_scale = hit.scale
         entry.memory_box = (hit.x, hit.y)
+        entry.memory_at = now if now is not None else time.monotonic()
 
     def _locate(
         self,
@@ -384,13 +418,16 @@ class ImageMatcher:
     def _roi_band_rect(cls, screenshot: np.ndarray, profile: MatchProfile) -> tuple[int, int, int, int]:
         """把 ROI 矩形的计算结果按 (画面尺寸, roi_band) 缓存住。
 
-        ponytail: 缓存上限跟着 class dict 自带；同一 (h, w, band) 只算一次。
+        ponytail: OrderedDict + ROI_CACHE_MAXSIZE 跑 LRU；同一 (h, w, band) 只算一次，
+        命中率最低的旧条目自动淘汰，避免长跑进程积累大量历史键值。
         在 _match_one 里每个模板都会调用一次，N 个模板 + 每帧重算就是 N 次冗余。
         """
         height, width = screenshot.shape[:2]
         cache_key = (height, width, profile.roi_band)
         cached = cls._roi_rect_cache.get(cache_key)
         if cached is not None:
+            # LRU：命中即移到队尾，最久未使用自然下沉到队首
+            cls._roi_rect_cache.move_to_end(cache_key)
             return cached
         band = profile.roi_band
         if not band:
@@ -403,6 +440,9 @@ class ImageMatcher:
             else:
                 rect = (0, top, width, bottom - top)
         cls._roi_rect_cache[cache_key] = rect
+        cls._roi_rect_cache.move_to_end(cache_key)
+        while len(cls._roi_rect_cache) > ROI_CACHE_MAXSIZE:
+            cls._roi_rect_cache.popitem(last=False)
         return rect
 
     def _template_entry(self, name: str) -> _TemplateEntry | None:

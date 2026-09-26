@@ -8,7 +8,7 @@ import tempfile
 from dataclasses import dataclass
 from pathlib import Path
 
-from pydantic import BaseModel, ConfigDict, Field, ValidationError
+from pydantic import BaseModel, ConfigDict, Field, ValidationError, field_validator, model_validator
 
 from .matcher import DEFAULT_ROI_BAND, DEFAULT_SCALE_MAX, DEFAULT_SCALE_MIN, DEFAULT_SCALE_STEP
 from .settings import DATA_DIR, TRASH_DIR, fix_mojibake_name
@@ -17,6 +17,25 @@ logger = logging.getLogger(__name__)
 
 PLAN_DIR = DATA_DIR / "plans"
 PLAN_DIR.mkdir(parents=True, exist_ok=True)
+
+# 裁剪参数：值域上限取 1080p 全屏截图为基线（1920×1080）外加一倍冗余，
+# 桌面截屏 / 高分屏画面偶尔会跨到 4096；写死 8192 既能挡住脏值，又不会误伤真实截图。
+_CROP_MAX_DIM = 8192
+# 裁剪面积上限 = 1080p 全屏（防「整张图覆盖」误存为模板）
+_CROP_MAX_AREA = 1920 * 1080
+
+
+def _safe_field_name(value: object) -> str:
+    """统一裁剪字段：必须是整数、0 ≤ value ≤ _CROP_MAX_DIM。
+
+    用来给 PlanPayload.crop / CropRequest 做边界校验，避免负数、超大值绕过校验。
+    抛出 ValueError 让 pydantic / FastAPI 转成 400 + 可读 message。
+    """
+    if isinstance(value, bool) or not isinstance(value, int):
+        raise ValueError("必须是整数")
+    if value < 0 or value > _CROP_MAX_DIM:
+        raise ValueError(f"必须在 0 到 {_CROP_MAX_DIM} 之间")
+    return value
 
 
 class PlanPayload(BaseModel):
@@ -39,6 +58,30 @@ class PlanPayload(BaseModel):
     freeze_guard: bool = True
     freeze_threshold: float = Field(default=3.0, ge=0, le=64)
     freeze_max_waits: int = Field(default=6, ge=1, le=20)
+    # 可选裁剪参数：方案保存时附带最近一次截图采样框；前端的模板采样接口
+    # 也走相同的字段名，所以校验集中在这里（plans + app.py 复用）。
+    crop: dict[str, int] | None = None
+
+    @field_validator("crop")
+    @classmethod
+    def _validate_crop(cls, value: dict[str, int] | None) -> dict[str, int] | None:
+        if value is None:
+            return None
+        cleaned: dict[str, int] = {}
+        for key in ("x", "y", "width", "height"):
+            raw = value.get(key)
+            cleaned[key] = int(_safe_field_name(raw))
+        if cleaned["width"] <= 0 or cleaned["height"] <= 0:
+            raise ValueError("裁剪尺寸必须大于 0")
+        if cleaned["x"] < 0 or cleaned["y"] < 0:
+            raise ValueError("裁剪起点不能为负")
+        if cleaned["x"] + cleaned["width"] > _CROP_MAX_DIM:
+            raise ValueError("裁剪范围超出右边界")
+        if cleaned["y"] + cleaned["height"] > _CROP_MAX_DIM:
+            raise ValueError("裁剪范围超出下边界")
+        if cleaned["width"] * cleaned["height"] > _CROP_MAX_AREA:
+            raise ValueError(f"裁剪面积超过 {_CROP_MAX_AREA} 像素，疑似全图覆盖")
+        return cleaned
 
 
 class PlanSaveRequest(BaseModel):

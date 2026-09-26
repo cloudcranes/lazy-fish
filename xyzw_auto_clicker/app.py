@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import asyncio
+import json
 import logging
 import os
 import re
@@ -12,12 +13,12 @@ from fastapi import FastAPI, HTTPException, Request
 from fastapi.responses import FileResponse, HTMLResponse, Response
 from fastapi.staticfiles import StaticFiles
 from fastapi.templating import Jinja2Templates
-from pydantic import BaseModel, Field, field_validator
+from pydantic import BaseModel, Field, field_validator, model_validator
 
 from .adb import AdbClient
 from .logging_setup import configure as _configure_logging
 from .matcher import ImageMatcher
-from .plans import PlanPayload, PlanSaveRequest, delete_plan, ensure_default_plan, list_plans, load_plan, save_plan
+from .plans import PlanPayload, PlanSaveRequest, _CROP_MAX_AREA, _safe_field_name, delete_plan, ensure_default_plan, list_plans, load_plan, save_plan
 from .runner import TaskRunner
 from .settings import BASE_DIR, SHOT_DIR, STOP_FILE, TEMPLATE_DIR, repair_template_names
 from .tasks.chest import build_chest_config
@@ -67,6 +68,21 @@ class CropRequest(BaseModel):
         if not re.fullmatch(r"[A-Za-z0-9._:-]+", value):
             raise ValueError("device_id 仅允许字母数字与 . _ : -")
         return value
+
+    @field_validator("x", "y", "width", "height")
+    @classmethod
+    def _validate_geometry(cls, value: int) -> int:
+        # 复用 plans._safe_field_name：与 PlanPayload.crop 走同一道闸，
+        # 上限 8192 防超大值绕过校验；负数由 Field(ge=0) 拒收。
+        return _safe_field_name(value)
+
+    @model_validator(mode="after")
+    def _validate_area(self) -> CropRequest:
+        # 防「整张图覆盖」：裁剪面积超过 1080p 全屏时拒绝，怀疑值被前端 bug 写成全屏。
+        # 注意这里不校 x+w / y+h，因为服务端要拿到截图后再判断；这里只挡面积超界。
+        if self.width * self.height > _CROP_MAX_AREA:
+            raise ValueError(f"裁剪面积超过 {_CROP_MAX_AREA} 像素，疑似全图覆盖")
+        return self
 
 
 class StartRequest(PlanPayload):
@@ -230,6 +246,64 @@ async def health() -> dict[str, object]:
         "runner_status": runner.state.status,
         "uptime": round(time.monotonic() - _APP_START_TIME, 3),
     }
+
+
+@app.get("/api/metrics")
+async def metrics() -> Response:
+    """运行时指标：仅 LOG_JSON=1 启用（容器化部署默认关闭，开发期手动开）。
+
+    ponytail: 与 logging_setup._env_json 走同一套开关，确保「结构化日志 + 指标端点」
+    同步启用——避免生产环境无意中暴露进程内存 / 任务计数等敏感指标。
+    字段顺序稳定，便于 Prometheus / VictoriaMetrics 文本解析。
+    """
+    if not _metrics_enabled():
+        return Response(status_code=404)
+    path = runner.state.last_screenshot
+    last_screenshot_mtime: float | None = None
+    if path is not None:
+        try:
+            last_screenshot_mtime = path.stat().st_mtime
+        except OSError:
+            last_screenshot_mtime = None
+    body = {
+        "process_resident_memory_bytes": _process_resident_memory_bytes(),
+        "runner_status": runner.state.status,
+        "last_screenshot_mtime": last_screenshot_mtime,
+        "uptime_seconds": round(time.monotonic() - _APP_START_TIME, 3),
+        "tasks_started_total": runner.tasks_started_total,
+    }
+    return Response(
+        content=json.dumps(body, ensure_ascii=False, sort_keys=False),
+        media_type="application/json",
+    )
+
+
+def _metrics_enabled() -> bool:
+    """LOG_JSON=1 → /api/metrics 同步开启；其他情况返回 404。
+
+    与 logging_setup._env_json 复用同一套真值表，避免两边规则漂移。
+    """
+    from .logging_setup import _env_json
+
+    return _env_json()
+
+
+def _process_resident_memory_bytes() -> int:
+    """读 /proc/self/status 的 VmRSS；非 Linux / 文件不存在时降级返回 0。
+
+    ponytail: 不引 psutil，只读一行；容器内 /proc 几乎一定有，沙箱/Windows 测试场景
+    拿不到时返回 0 而不是抛异常，避免把指标端点变成 500。
+    """
+    try:
+        with open("/proc/self/status", encoding="utf-8") as handle:
+            for line in handle:
+                if line.startswith("VmRSS:"):
+                    parts = line.split()
+                    if len(parts) >= 2 and parts[1].isdigit():
+                        return int(parts[1]) * 1024
+    except (OSError, ValueError):
+        return 0
+    return 0
 
 
 def _safe_template_name(name: str) -> str:
