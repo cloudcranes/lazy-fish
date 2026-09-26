@@ -1,6 +1,6 @@
 # lazy-fish 优化路线图
 
-> **生成日期**: 2026-09-25
+> **生成日期**: 2026-09-25；**阶段 3 落地补登**: 2026-09-26；**阶段 3 wave2 补登**: 2026-09-26
 > **性质**: 只读整合。基于 backend-audit.md（28 条）与 t2-frontend-audit.md（13 条）。
 > **评分维度**: 性价比（effort / impact）× 风险（泄露 / 数据丢失 / UX 坏掉）。
 > **三阶段**: 阶段 1（≤ 1 周，必做）/ 阶段 2（≤ 1 月，值做）/ 阶段 3（长期，备选）。
@@ -228,9 +228,106 @@ GET /api/health:
 
 **测试结果**：84 passed（含阶段 1 的 75 条 + `tests/test_pr6_contract.py` 新增 9 条契约 smoke）。
 
-### 8.3 阶段 3（备选，未启动）
+### 8.3 阶段 3（已落地，2026-09-26）
 
-按 §3 表中触发条件按需启动，当前无强制验收标准。
+**轨道 A：静态检查 + 安全扫描**（PR-7，commit `cc64a72`，track-a-engineer）
+
+| 变更 | 文件 |
+|---|---|
+| ruff / pyright / pip-audit 依赖 | `requirements-dev.txt` |
+| `[tool.ruff]` line-length=100 + `select=[E,F,W,I,B,UP]` + `tests/**` per-file-ignores | `pyproject.toml` |
+| `[tool.pyright]` pythonVersion=3.10 + strict=`xyzw_auto_clicker` | `pyproject.toml` |
+| `lint` 目标 = `ruff check .` + `python scripts/pyright_check.py` | `Makefile` |
+| pyright 诊断 → baseline 三元组对比脚本 | `scripts/pyright_check.py`（新） |
+| 基线再生成脚本 | `scripts/pyright_baseline_gen.py`（新） |
+| strict 已知诊断 24 条基线 | `pyright-baseline.json`（新） |
+| `lint` job（needs: test）+ `test` job，main fail-fast / PR continue-on-error | `.github/workflows/ci.yml` |
+| `pip-audit` OSV → CycloneDX JSON → SARIF 上传 GH Security tab；main fail，PR warn | `.github/workflows/security.yml`（新） |
+| E501 折行 / 删除未用 import | `xyzw_auto_clicker/{adb,app,matcher,plans,runner,logging_setup}.py` |
+
+**轨道 B：契约硬化**（PR-8，commit `90ff13b`，track-b-engineer）
+
+| 变更 | 文件 |
+|---|---|
+| `_safe_field_name` + `PlanPayload.crop`（x/y/w/h 0–8192 + 面积 ≤ 1920×1080） | `xyzw_auto_clicker/plans.py` |
+| `CropRequest` x/y/w/h 走 `_safe_field_name` + `model_validator` 校面积；新增 `/api/metrics`（LOG_JSON=1 才返回 200，否则 404），字段集 `process_resident_memory_bytes` / `runner_status` / `last_screenshot_mtime` / `uptime_seconds` / `tasks_started_total` | `xyzw_auto_clicker/app.py` |
+| `_TemplateEntry.memory_at` + `HOT_PATH_TTL_SECONDS=60`；`_match_one` 过期回 ROI；`_roi_rect_cache` 改 OrderedDict + `ROI_CACHE_MAXSIZE=128` LRU；新增 `clear_class_cache` | `xyzw_auto_clicker/matcher.py` |
+| `TaskRunner.tasks_started_total` 随 `start()` 自增 | `xyzw_auto_clicker/runner.py` |
+| `build_chest_config` `pop('crop')` 避免 `TaskConfig` 收到未知键 | `xyzw_auto_clicker/tasks/chest.py` |
+| `pollState` 接入 `window.focus/blur/online/offline`；`toast()` 改「替换而非追加」，删 `TOAST_MAX` | `static/app.js` |
+| `toastHost` 加 `role=status` + `aria-live=polite` + `aria-atomic=true` | `templates/index.html` |
+| 契约 smoke 16 条 | `tests/test_pr8_contract.py`（新） |
+
+**测试结果**：100 passed（基线 84 + PR-8 新增 16）。
+
+**轨道 B 验证证据**：
+
+- `ruff check .` → All checks passed!（exit 0）
+- `pyright strict` → 24 total / 0 new beyond baseline（exit 0）
+- `python -m pytest tests/` → 100 passed in 7.41s
+- `python -m py_compile xyzw_auto_clicker/*.py scripts/*.py tests/*.py` → OK
+- `/api/metrics` 契约：LOG_JSON=0 → 404；LOG_JSON=1 → 200 + 5 字段（`test_metrics_endpoint_disabled_without_log_json` / `test_metrics_endpoint_returns_required_fields` / `test_metrics_endpoint_handles_missing_proc` / `test_tasks_started_total_increments` 全部 PASS）
+
+**作用域备注**：
+
+- 轨道 A 实际新增 `scripts/`（`pyright_check.py` + `pyright_baseline_gen.py`），超出指定 7 文件 1 个目录，是 baseline 把关机制的必要配套。
+- pyright baseline 24 条诊断属真实类型 bug（`plans._write_json` 参数协变、`logging_setup._JsonHandler` stdlib `StreamHandler` 重写、`runner.start` `state` 可能未绑定等），修复涉及 saved-plan payload 形状 / Handler 子类化 / 异步任务分支，超出 PR-7 静态扫描边界，按 spec 留基线；新增/迁移代码引入新诊断会在 CI `lint` job 立刻 fail。
+- `pip-audit` 本地 sandbox 未安装（`python -m pip-audit` → ModuleNotFoundError），CI ubuntu-latest 步骤会 `pip install pip-audit` 后跑——这是环境限制，不影响项目契约。
+- `scripts/pyright_check.py` 用 `shutil.which("pyright")`，Windows 本地若未把 pyright 入口装到 PATH 会 fallback 到字面量 `"pyright"` 触发 `FileNotFoundError`（实测本地复现）。CI 上 `pip install -r requirements-dev.txt` 装的是 console-script `pyright`，在 `ubuntu-latest` + GitHub 默认 PATH 下能找到。建议：在脚本里加一行 `sys.executable`-as-pyright fallback 或在 `Makefile lint` 里直接 `python -m pyright`，以兼容 Windows 开发机。
+
+**新增里程碑**：阶段 3 提前把「§3 触发条件表」里的 *Pyright / mypy strict 接入* + *`safety` / `pip-audit` 加 CI* 两项激活为常驻 CI gate；剩余触发条件（multi-scale batch、adb 进程池、OpenTelemetry、视觉回归、axe-core CI、release-please 等）按 §3 条件按需启动。
+
+### 8.3 阶段 3 wave2 — adb 长连接池 + axe-core 自动 a11y（已落地，2026-09-26）
+
+> wave2 把 §3 表里「adb 长连接进程池」+「axe-core 接入 CI」两项提前激活为常驻基础设施；commit 已在 origin/main。
+
+**commit 链**（2 commits，按时间倒序）：
+
+| SHA | 说明 |
+|---|---|
+| `9cfc2c8` | feat: PR-9 adb 长连接池 (track B-engineer) |
+| `5df7c72` | feat: PR-10 axe-core 自动 a11y |
+
+**PR-9：adb 长连接池**（commit `9cfc2c8`，2 文件 +163/-2，track B-engineer）
+
+| 变更 | 文件 |
+|---|---|
+| `_ProcPool`（OrderedDict by device_id + LIFO 淘汰，max_size=5、idle_seconds=60） | `xyzw_auto_clicker/adb.py` |
+| `AdbError.code` 新增 `NOT_AVAILABLE`（池创建失败 / 长连接写失败） | `xyzw_auto_clicker/adb.py` |
+| `tap(x, y, device_id)` 走池：复用同 `Popen` 的 stdin 发 `input tap x y\n`；`screenshot_png` 仍走 `exec-out screencap -p`（二进制不能塞交互式 shell） | `xyzw_auto_clicker/adb.py` |
+| 淘汰：池满 + idle≥60s → `proc.kill()` + `proc.wait(1)`，LIFO 取最久 idle | `xyzw_auto_clicker/adb.py` |
+| 复用 / 淘汰 / NOT_AVAILABLE 三类用例 | `tests/test_adb_pool.py`（新） |
+
+**PR-10：axe-core 自动 a11y**（commit `5df7c72`，7 文件 +231/-3，a11y-engineer）
+
+| 变更 | 文件 |
+|---|---|
+| Playwright + `@axe-core/playwright` 切 5 视图（console / plans / templates / capture / logs）跑 axe-core；`wcag2a/2aa/21a/21aa`；serious/critical 视作 fail；退出码 0/1/2 = pass/fail/env-down | `tests/ui/a11y.mjs`（新） |
+| `@axe-core/playwright ^4.10.0` + `playwright ^1.49.0` 仅 devDep；`workspaces: [tests/ui, relay]` 下发到 `tests/ui/node_modules/` | `package.json`（新）+ `tests/ui/package.json`（新） |
+| 新增 `docker-up` job（启动懒鱼容器并长起 8999，循环 `/api/health` 直至就绪）+ `a11y` job（`needs: docker-up`；main fail-fast，PR `continue-on-error`） | `.github/workflows/ci.yml` |
+| 排除 `tests/**/node_modules/`（镜像里没有 npm） | `.dockerignore` |
+| §11「自动 a11y」一节，闸失败门槛 + 与 §6 WCAG AA 的双向关系 | `docs/UI-DESIGN.md` |
+| 说明 `a11y.mjs` 是唯一需要 npm 依赖的脚本 | `tests/ui/README.md` |
+
+**总验收验证**（gate-reviewer 复核，2026-09-26）：
+
+- `python -m pytest tests/ -q` → **103 passed in 7.42s**（基线 100 + PR-9 新增 3 + PR-10 无 Python 测试）
+- `python -m ruff check .` → All checks passed!
+- `python -m py_compile xyzw_auto_clicker/*.py` → 10 files OK
+- `node --check tests/ui/a11y.mjs` → ok
+- JSON / YAML 解析无错（`package.json` + `tests/ui/package.json` + `.github/workflows/ci.yml`）
+- 依赖一致：仓根 + `tests/ui` 都是 `@axe-core/playwright ^4.10.0` + `playwright ^1.49.0`
+- adb 公 API（`async def screenshot_png / tap / devices / _run`）签名保持兼容；新增 `AdbError.code = "NOT_AVAILABLE"` 不破坏旧字段
+- CI 拓扑：lint → test → (docker || docker-up) → a11y；`docker-up` 与 `docker` 并存，`a11y` 仅挂在 `docker-up` 上
+- commit 范围核对：PR-9 未触碰 `OPTIMIZATION-ROADMAP.md` / `test_adb_pool.py` 之外的接口；PR-10 未触碰 `adb.py` / `test_adb_pool.py`，留给 PR-9 单独提交
+
+**未闭合项**：
+
+- `pip-audit` / `pyright` Windows 本地 fallback（同 §8.2 已登记，不重复）
+- axe-core 在 PR 上 `continue-on-error` 是过渡策略，axe 噪声清完后需把 `continue-on-error: ${{ github.event_name == 'pull_request' }}` 摘掉升级为合并门槛（建议放下一 wave 单独 PR）
+- adb 池的 `idle_seconds=60` 是默认值；高密度点击场景（§3 表里 ">5/s" 触发条件）尚无真实负载复测，待 click/screenshot 频率触线时再调 max_size / idle_seconds
+
+**新增里程碑**：阶段 3 wave2 把「§3 触发条件表」里的 *adb 长连接进程池* + *axe-core 接入 CI* 两项提前激活为常驻基础设施。剩余触发条件（multi-scale batch、OpenTelemetry、视觉回归、release-please 等）继续按 §3 条件按需启动。
 
 ---
 
