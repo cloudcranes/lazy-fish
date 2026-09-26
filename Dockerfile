@@ -56,6 +56,8 @@ WORKDIR /app
 
 COPY pyproject.toml ./
 COPY xyzw_auto_clicker ./xyzw_auto_clicker
+COPY static ./static
+COPY templates ./templates
 
 # 数据目录（模板/方案/截图缓存）由挂载提供，这里只建好占位以便镜像自检
 RUN mkdir -p /app/data/templates /app/data/plans /app/data/screenshots
