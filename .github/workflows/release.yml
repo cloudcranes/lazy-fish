@@ -86,13 +86,13 @@ jobs:
           cache-to: type=gha,mode=max
 
       - name: Create GitHub release
-        # Tag push uses the real ref tag; manual dispatch uses inputs.version (prefixed
-        # with 'v'). release:published is skipped — release-please already created it.
-        if: github.event_name == 'push' || github.event_name == 'workflow_dispatch'
+        # 仅 tag push 路径建 release（tag 不存在时）；release:published 由
+        # release-please 已建；dispatch 只补镜像，不重复建 release。
+        if: github.event_name == 'push'
         uses: softprops/action-gh-release@v2
         with:
-          tag_name: ${{ github.event_name == 'push' && github.ref_name || format('xyzw-auto-clicker-v{0}', steps.version.outputs.VERSION) }}
-          generate_release_notes: ${{ github.event_name == 'push' }}
+          tag_name: ${{ github.ref_name }}
+          generate_release_notes: true
           body: |
             ## Docker
 
