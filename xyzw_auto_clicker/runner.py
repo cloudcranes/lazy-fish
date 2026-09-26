@@ -26,6 +26,8 @@ class RunnerState:
     clicked: int = 0
     target: int = 0
     misses: int = 0
+    # PR-26：状态归属的设备，/api/tasks/state 按 device_id 分组时区分来源
+    device_id: str | None = None
     last_error: str | None = None
     last_match: dict[str, object] | None = None
     last_screenshot: Path | None = None
@@ -43,6 +45,7 @@ class RunnerState:
             "progress_percent": progress_percent,
             "is_running": is_running,
             "misses": self.misses,
+            "device_id": self.device_id,
             "last_error": self.last_error,
             "last_match": self.last_match,
             "last_screenshot": last_screenshot,
@@ -85,6 +88,7 @@ class TaskRunner:
         # 局部别名：self.state 在 await 之后可能被外层换掉（start/stop 边界），
         # 但本轮状态绑死在入口处的 self.state 上，pyright 推断不出这点要显式收窄。
         state: RunnerState = self.state
+        state.device_id = config.device_id
         try:
             for second in range(3, 0, -1):
                 self._log(f"{second} 秒后开始，请确认游戏停在宝箱活动页")
@@ -239,3 +243,34 @@ class TaskRunner:
 
     def _log(self, message: str) -> None:
         self.state.logs.append(f"{datetime.now().strftime('%H:%M:%S')} {message}")
+
+
+class RunnerRegistry:
+    """PR-26：device_id → TaskRunner 的进程内注册表，支撑单进程多设备并发。
+
+    同一台设备的多次 start 串行复用同一个 runner（running() 判 busy 保证互斥），
+    不同设备各占一个 runner，靠 asyncio.create_task 在事件循环里并发跑、state 独立。
+    """
+
+    def __init__(self, adb: AdbClient, matcher: ImageMatcher) -> None:
+        self._adb = adb
+        self._matcher = matcher
+        self._runners: dict[str, TaskRunner] = {}
+
+    def get_or_create(self, device_id: str | None) -> TaskRunner:
+        key = device_id or ""
+        runner = self._runners.get(key)
+        if runner is None:
+            runner = TaskRunner(self._adb, self._matcher)
+            self._runners[key] = runner
+        return runner
+
+    def get(self, device_id: str | None) -> TaskRunner | None:
+        return self._runners.get(device_id or "")
+
+    def snapshots(self) -> dict[str, dict[str, object]]:
+        """按 device_id 分组导出全部状态；未绑定设备的任务归到空串键。"""
+        return {
+            key: runner.state.snapshot()
+            for key, runner in self._runners.items()
+        }
