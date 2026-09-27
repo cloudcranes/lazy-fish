@@ -39,6 +39,13 @@
         </button>
 
         <div class="nav-group">维护</div>
+        <button class="nav-item" type="button" data-nav="devices" id="nav-devices">
+          <svg class="nav-item-icon" viewBox="0 0 20 20" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round">
+            <rect x="2.5" y="4" width="15" height="10.5" rx="2" />
+            <path d="M8 16.5h4M10 14v2.5" />
+          </svg>
+          <span>设备管理</span>
+        </button>
         <button class="nav-item" type="button" data-nav="templates" id="nav-templates">
           <svg class="nav-item-icon" viewBox="0 0 20 20" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round">
             <rect x="2.5" y="3.5" width="15" height="13" rx="2.5" />
@@ -571,6 +578,48 @@
                     命名建议保持简洁，保存后到「模板管理」为它指派角色。覆盖旧模板只替换图片，方案里对它的引用不受影响。分辨率变化或按钮改版后需重新采样。
                   </p>
                 </div>
+              </div>
+            </div>
+          </section>
+
+          <!-- ---------------- 设备管理 ---------------- -->
+          <section class="view" id="view-devices" tabindex="-1" aria-labelledby="nav-devices">
+            <div class="view-head">
+              <div>
+                <div class="eyebrow">Devices</div>
+                <h1 class="page-title">设备管理</h1>
+                <p class="page-sub">检测本机 ADB 设备，连接远程设备；选中即成为目标设备。</p>
+              </div>
+              <div class="view-head-actions">
+                <button class="btn btn-ghost" type="button" id="loadDevices">检测设备</button>
+              </div>
+            </div>
+
+            <div class="card">
+              <div class="card-head">
+                <span class="card-title">已检测设备</span>
+                <span class="card-title-note" id="devicesSummary">共 0 个</span>
+              </div>
+              <div class="card-body">
+                <label class="field">
+                  <span class="field-label" for="deviceSelectPage">目标设备</span>
+                  <select class="select" data-lock id="deviceSelectPage"></select>
+                  <span class="field-hint">选中后自动同步为方案中的目标设备</span>
+                </label>
+              </div>
+            </div>
+
+            <div class="card">
+              <div class="card-head">
+                <span class="card-title">远程 ADB 设备</span>
+                <span class="card-title-note">连接后自动保存，下次启动自动重连</span>
+              </div>
+              <div class="card-body">
+                <div class="field-row">
+                  <input class="input mono" id="devRemoteHost" placeholder="192.168.1.10:5555" autocomplete="off" spellcheck="false" />
+                  <button class="btn btn-ghost" type="button" id="devRemoteConnect">连接</button>
+                </div>
+                <div class="remote-list" id="devRemoteList"></div>
               </div>
             </div>
           </section>

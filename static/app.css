@@ -591,6 +591,27 @@ pre,
   flex: none;
 }
 
+.remote-list {
+  display: flex;
+  flex-direction: column;
+  gap: var(--sp-1);
+  margin-top: var(--sp-2);
+}
+
+.remote-list .remote-item {
+  display: flex;
+  align-items: center;
+  gap: var(--sp-2);
+  margin-right: 0;
+  padding: var(--sp-1) var(--sp-2);
+  border-radius: var(--radius, 8px);
+  background: var(--surface-2, rgba(0, 0, 0, 0.04));
+}
+
+.remote-list .remote-item .btn {
+  margin-left: auto;
+}
+
 .remote-item {
   display: inline-flex;
   align-items: center;

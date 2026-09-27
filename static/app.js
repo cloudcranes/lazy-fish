@@ -48,6 +48,7 @@ const RING_TONE = {
 const NAV_ITEMS = [
   ["console", "控制台"],
   ["plans", "方案与参数"],
+  ["devices", "设备管理"],
   ["templates", "模板管理"],
   ["capture", "截图采样"],
   ["logs", "运行日志"],
@@ -631,7 +632,7 @@ function renderActivePlan() {
 async function loadDevices({ quiet = false } = {}) {
   const data = await api("/api/devices");
   const options = data.devices.map((device) => ({ value: device.id, label: `${device.id} (${device.status})` }));
-  for (const id of ["deviceSelect", "captureDevice"]) {
+  for (const id of ["deviceSelect", "deviceSelectPage", "captureDevice"]) {
     const el = $(id);
     const keep = el.value;
     el.innerHTML = "";
@@ -654,35 +655,37 @@ async function loadDevices({ quiet = false } = {}) {
 
 /* PR-27：远程 ADB 设备列表渲染 + 连接/断开 */
 function renderRemotes(remotes) {
-  const el = $("remoteList");
-  const entries = Object.entries(remotes);
-  el.innerHTML = "";
-  if (!entries.length) {
-    el.textContent = "暂无已保存的远程设备";
-    return;
-  }
-  for (const [host, ok] of entries) {
-    const row = document.createElement("span");
-    row.className = "remote-item";
-    row.innerHTML = `<code>${host}</code> <span class="${ok ? "remote-ok" : "remote-bad"}">${ok ? "已连接" : "离线"}</span>`;
-    if (ok) {
-      const btn = document.createElement("button");
-      btn.type = "button";
-      btn.className = "btn btn-sm btn-ghost";
-      btn.textContent = "断开";
-      btn.onclick = () => remoteDisconnect(host);
-      row.appendChild(btn);
+  for (const el of [$("remoteList"), $("devRemoteList")]) {
+    const entries = Object.entries(remotes);
+    el.innerHTML = "";
+    if (!entries.length) {
+      el.textContent = "暂无已保存的远程设备";
+      continue;
     }
-    el.appendChild(row);
+    for (const [host, ok] of entries) {
+      const row = document.createElement("span");
+      row.className = "remote-item";
+      row.innerHTML = `<code>${host}</code> <span class="${ok ? "remote-ok" : "remote-bad"}">${ok ? "已连接" : "离线"}</span>`;
+      if (ok) {
+        const btn = document.createElement("button");
+        btn.type = "button";
+        btn.className = "btn btn-sm btn-ghost";
+        btn.textContent = "断开";
+        btn.onclick = () => remoteDisconnect(host);
+        row.appendChild(btn);
+      }
+      el.appendChild(row);
+    }
   }
 }
 
 async function remoteConnect() {
-  const host = $("remoteHost").value.trim();
+  const host = $("remoteHost").value.trim() || $("devRemoteHost").value.trim();
   if (!host) return toast("请填写 host:port", "warn");
   try {
     await api("/api/devices/connect", { method: "POST", body: JSON.stringify({ host }) });
     $("remoteHost").value = "";
+    $("devRemoteHost").value = "";
     toast("远程设备已连接", "success");
     await loadDevices({ quiet: true });
   } catch (e) {
@@ -1172,7 +1175,7 @@ function setLocked(isRunning) {
    节点会被 DOM 卸载，下次重建即可，无需每次全树扫描。 */
 function rebuildLockedNodes() {
   const nodes = document.querySelectorAll(
-    "[data-lock], #savePlan, #applyRecommended, #applyRecommended2, #loadDevices, #shotBtn, #saveTemplate, #refreshTemplates, #savePlanFromConsole, #resumeBtn, #runAlertAction, #updatePlan, #startBtn, #stopBtn, #clickCountMinus, #clickCountPlus, #consoleCountMinus, #consoleCountPlus",
+    "[data-lock], #savePlan, #applyRecommended, #applyRecommended2, #loadDevices, #shotBtn, #saveTemplate, #refreshTemplates, #savePlanFromConsole, #resumeBtn, #runAlertAction, #updatePlan, #startBtn, #stopBtn, #clickCountMinus, #clickCountPlus, #consoleCountMinus, #consoleCountPlus, #devRemoteConnect",
   );
   lockedNodes = new Set(nodes);
   // 按 view 分桶：当前活跃 view 的节点全集 = lockedNodes ∪ 该 view 的节点
@@ -1510,6 +1513,7 @@ function bindActions() {
   on("loadDevices", () => loadDevices());
   on("rescanDevice", () => loadDevices());
   on("remoteConnect", remoteConnect);
+  on("devRemoteConnect", remoteConnect);
   on("shotBtn", takeShot);
   on("saveTemplate", saveTemplate);
   on("refreshTemplates", () => loadTemplates());
@@ -1572,6 +1576,10 @@ function bindActions() {
   $("freezeGuard").addEventListener("change", renderSummaries);
   $("threshold").addEventListener("input", renderSummaries);
   $("deviceSelect").addEventListener("change", renderSummaries);
+  $("deviceSelectPage").addEventListener("change", () => {
+    $("deviceId").value = $("deviceSelectPage").value;
+    renderSummaries();
+  });
   $("captureDevice").addEventListener("change", () => { $("deviceId").value = $("captureDevice").value; renderSummaries(); });
   // 采样页：选已有模板名 → 回填名称；手改名称 → 重新判定是否覆盖
   $("templatePick").addEventListener("change", () => {

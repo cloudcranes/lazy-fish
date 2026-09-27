@@ -44,12 +44,15 @@ ENV PYTHONDONTWRITEBYTECODE=1 \
 
 # 运行时装 opencv-python-headless 需要的系统库 + adb 客户端
 # （PR-27 远程设备管理：镜像内自带 adb，connect/disconnect/截图/点击全走容器内 adb）。
+# Debian 的 adb 包装在 /usr/lib/android-sdk/platform-tools/，不在默认 PATH；
+# ln -sf 到 /usr/local/bin 让 subprocess(["adb", ...]) 可直接找到。
 # 合并 RUN 层 + --no-install-recommends + 清理 apt lists。
 RUN apt-get update \
  && apt-get install -y --no-install-recommends \
         libgl1 \
         libglib2.0-0 \
         adb \
+ && ln -sf /usr/lib/android-sdk/platform-tools/adb /usr/local/bin/adb \
  && rm -rf /var/lib/apt/lists/*
 
 # builder 阶段的 site-packages 复用进来；COPY --from 不会带 pip / build-base。

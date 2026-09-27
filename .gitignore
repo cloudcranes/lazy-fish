@@ -46,6 +46,9 @@ node_modules/
 # AgentTeams 本地运行数据（不属仓库）
 .agent-teams/
 
+# UI 测试截图产物
+.workbuddy/
+
 # 本地探测产物
 pyright-err.txt
 pyright-out.json

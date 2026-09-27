@@ -25,10 +25,10 @@ node tests/ui/plan-selection.mjs  # 44 项：方案卡载入是否真的生效�
 node tests/ui/plan-actions.mjs    # 31 项：设为默认、删除（内联二次确认 / Esc 取消 / 锁定）、删除使用中方案的状态清理（会临时建方案并自动还原）
 node tests/ui/template-picker.mjs # 31 项：采样页选择已有模板名、覆盖提示与按钮语义、手动输入的同步判定（非破坏性，不需要模拟器）
 node tests/ui/capture-flow.mjs    # 14 项：截图拉取、拖拽框选、裁剪保存（需连接模拟器）
-node tests/ui/a11y.mjs           # 自动 a11y：Playwright + axe-core 遍历 5 视图，serious/critical 视作 fail
+node tests/ui/a11y.mjs           # 自动 a11y：Playwright + axe-core 遍历 6 视图，serious/critical 视作 fail
 ```
 
-合计 **267 项**断言 + 5 视图 a11y 自检。
+合计 **267 项**断言 + 6 视图 a11y 自检。
 
 全部以退出码 0 表示通过，非 0 表示有失败项。
 

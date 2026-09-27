@@ -4,21 +4,20 @@
 // 设计要点：
 //   - 复用 tests/ui/ 下"纯 CDP/Node 内置"的协议思路，但这次用 Playwright
 //     只为拿到 axe-core 的页面快照；其他 .mjs 仍是裸 mjs，零共享代码。
-//   - 5 个视图对应 nav 按钮（console / plans / templates / capture / logs），
+//   - 6 个视图对应 nav 按钮（console / plans / devices / templates / capture / logs），
 //     每个视图先点击切换、等一次微任务，再 inject axe-core 跑分析。
 //   - 默认 fail-on：serious / critical；moderate / minor 仅打印不阻塞。
 //     这与 docs/UI-DESIGN.md §6「WCAG AA」保持一致——contrast / keyboard
 //     / aria 之类的真问题都在 serious/critical 里。
 //   - 退出码契约（PR-17 重申，此文件自 PR-10 以来未变）：
-//       0 = 5 视图全部无 serious/critical（pass）
-//       1 = 任意视图出现 serious 或 critical（CI 失败 / 合并门槛）
-//       2 = 环境起不来（端口未通、依赖未装、chromium 启动失败等）
+//       0 = 6 视图全部无 serious/critical（pass）
+//       1 = 任意视图出现 serious 或 critical（CI 失败 / 合并门槛）//       2 = 环境起不来（端口未通、依赖未装、chromium 启动失败等）
 //     CI 的 a11y job 自 PR-17 起摘除 continue-on-error，该退出码即 GH Actions 的失败值。
 import { chromium } from "playwright";
 import { AxeBuilder } from "@axe-core/playwright";
 
 const URL = process.env.APP_URL || "http://127.0.0.1:8999/";
-const VIEWS = ["console", "plans", "templates", "capture", "logs"];
+const VIEWS = ["console", "plans", "devices", "templates", "capture", "logs"];
 const FAIL_ON = new Set(["serious", "critical"]);
 
 const summary = [];
