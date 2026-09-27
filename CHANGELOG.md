@@ -1,5 +1,12 @@
 # Changelog
 
+## [0.1.4](https://github.com/cloudcranes/lazy-fish/compare/xyzw-auto-clicker-v0.1.3...xyzw-auto-clicker-v0.1.4) (2026-09-27)
+
+
+### Features
+
+* **devices:** 独立设备管理页 + 镜像持久化 adb PATH ([1d2cc7f](https://github.com/cloudcranes/lazy-fish/commit/1d2cc7f45161052d3ca95d49db8616ca6a6f8642))
+
 ## [0.1.3](https://github.com/cloudcranes/lazy-fish/compare/xyzw-auto-clicker-v0.1.2...xyzw-auto-clicker-v0.1.3) (2026-09-26)
 
 
